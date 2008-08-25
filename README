@@ -1,0 +1,6 @@
+Leex is a lexical analyzer generator for Erlang. It allows you to
+tokenize a textual input stream so that it can be grammatically
+analyzed and processed by yecc. It is NOT a part of OTP at this point.
+
+Thanks to Sébastien Arnaud who did the first packaging of leex for
+git.
