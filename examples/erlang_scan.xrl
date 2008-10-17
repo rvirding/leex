@@ -1,6 +1,6 @@
 %%% File    : erlang_scan.xrl
 %%% Author  : Robert Virding
-%%% Purpose : Token definitions for Erlang.
+%%% Purpose : Tkoen definitions for Erlang.
 
 Definitions.
 O	= [0-7]
@@ -37,6 +37,10 @@ Rules.
 			{token,{integer,TokenLine,cc_convert(TokenChars)}}.
 ->		:	{token,{'->',TokenLine}}.
 :-		:	{token,{':-',TokenLine}}.
+\|\|		:	{token,{'||',TokenLine}}.
+<-		:	{token,{'<-',TokenLine}}.
+\+\+		:	{token,{'++',TokenLine}}.
+--		:	{token,{'--',TokenLine}}.
 =/=		:	{token,{'=/=',TokenLine}}.
 ==		:	{token,{'==',TokenLine}}.
 =:=		:	{token,{'=:=',TokenLine}}.
@@ -44,8 +48,9 @@ Rules.
 >=		:	{token,{'>=',TokenLine}}.
 =<		:	{token,{'=<',TokenLine}}.
 <=		:	{token,{'<=',TokenLine}}.
-\+\+		:	{token,{'++',TokenLine}}.
---		:	{token,{'--',TokenLine}}.
+<<		:	{token,{'<<',TokenLine}}.
+>>		:	{token,{'>>',TokenLine}}.
+::		:	{token,{'::',TokenLine}}.
 []()[}{|!?/;:,.*+#<>=-] :
 			{token,{list_to_atom(TokenChars),TokenLine}}.
 \.{WS}		:	{end_token,{dot,TokenLine}}.
@@ -55,10 +60,17 @@ Erlang code.
 
 -export([reserved_word/1]).
 
+%% reserved_word(Atom) -> Bool
+%%   return 'true' if Atom is an Erlang reserved word, else 'false'.
+
 reserved_word('after') -> true;
 reserved_word('begin') -> true;
 reserved_word('case') -> true;
+reserved_word('try') -> true;
+reserved_word('cond') -> true;
 reserved_word('catch') -> true;
+reserved_word('andalso') -> true;
+reserved_word('orelse') -> true;
 reserved_word('end') -> true;
 reserved_word('fun') -> true;
 reserved_word('if') -> true;
@@ -79,6 +91,7 @@ reserved_word('bsl') -> true;
 reserved_word('bsr') -> true;
 reserved_word('or') -> true;
 reserved_word('xor') -> true;
+reserved_word('spec') -> true;
 reserved_word(_) -> false.
 
 base(L, Cs) ->
