@@ -34,7 +34,7 @@ Rules.
 			S = lists:sublist(TokenChars, 2, TokenLen - 2),
 			{token,{string,TokenLine,string_gen(S)}}.
 \$(\\{O}{O}{O}|\\\^.|\\.|.) :
-			{token,{integer,TokenLine,cc_convert(TokenChars)}}.
+			{token,{char,TokenLine,cc_convert(TokenChars)}}.
 ->		:	{token,{'->',TokenLine}}.
 :-		:	{token,{':-',TokenLine}}.
 \|\|		:	{token,{'||',TokenLine}}.
@@ -114,8 +114,8 @@ base([C|Cs], Base, SoFar) when C >= $a, C =< $f, C < Base + $a - 10 ->
 base([C|Cs], Base, SoFar) when C >= $A, C =< $F, C < Base + $A - 10 ->
     Next = SoFar * Base + (C - $A + 10),
     base(Cs, Base, Next);
-base([C|Cs], Base, SoFar) -> error;
-base([], Base, N) -> N.
+base([_|_], _, _) -> error;			%Unknown character
+base([], _, N) -> N.
 
 cc_convert([$$,$\\|Cs]) ->
     hd(string_escape(Cs));

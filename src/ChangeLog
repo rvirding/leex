@@ -1,0 +1,10 @@
+2008-10-22    <rv@DOUGLAS>
+
+	* leexinc.hrl (token, tokens, skip_tokens): Now use line number of
+	token start, which is much better.
+
+2008-10-21    <rv@DOUGLAS>
+
+	* leexinc.hrl (string): Now use line number of token start, which
+	is much better.
+
