@@ -32,7 +32,7 @@ string(Ics0, L0, Tcs, Ts) ->
     case yystate(yystate(), Ics0, L0, 0, reject, 0) of
 	{A,Alen,Ics1,L1} ->			%Accepting end state
 	    string_cont(Ics1, L1, yyaction(A, Alen, Tcs, L0), Ts);
-	{A,Alen,Ics1,L1,_S1} ->			%After an accepting state
+	{A,Alen,Ics1,L1,_S1} ->			%Accepting transistion state
 	    string_cont(Ics1, L1, yyaction(A, Alen, Tcs, L0), Ts);
 	{reject,_Alen,Tlen,_Ics1,L1,_S1} ->	%After a non-accepting state
 	    {error,{L0,?MODULE,{illegal,yypre(Tcs, Tlen+1)}},L1};
@@ -76,20 +76,24 @@ token(S0, Ics0, L0, Tcs, Tlen0, Tline, A0, Alen0) ->
 	%% Accepting end state, we have a token.
 	{A1,Alen1,Ics1,L1} ->
 	    token_cont(Ics1, L1, yyaction(A1, Alen1, Tcs, Tline));
-	%% After an accepting end, we have a token but may get another.
+	%% Accepting transition state, can take more chars.
 	{A1,Alen1,[],L1,S1} ->			%Need more chars to check
 	    {more,{token,S1,Tcs,L1,Alen1,Tline,A1,Alen1}};
-	{A1,Alen1,Ics1,L1,_S1} ->		%Take we got
+	{A1,Alen1,Ics1,L1,_S1} ->		%Take what we got
 	    token_cont(Ics1, L1, yyaction(A1, Alen1, Tcs, Tline));
 	%% After a non-accepting state, maybe reach accept state later.
 	{A1,Alen1,Tlen1,[],L1,S1} ->		%Need more chars to check
 	    {more,{token,S1,Tcs,L1,Tlen1,Tline,A1,Alen1}};
-	{reject,_Alen1,_Tlen1,eof,L1,_S1} ->	%No token match
-	    {done,{eof,L1},[]};
-	{reject,_Alen1,Tlen1,Ics1,L1,_S1} ->	%
+	{reject,_Alen1,Tlen1,eof,L1,_S1} ->	%No token match
+	    %% Check for partial token which is error.
+	    Ret = if Tlen1 > 0 -> {error,{Tline,?MODULE,{illegal,Tcs}},L1};
+		     true -> {eof,L1}
+		  end,
+	    {done,Ret,eof};
+	{reject,_Alen1,Tlen1,Ics1,L1,_S1} ->	%No token match
 	    Error = {Tline,?MODULE,{illegal,yypre(Tcs, Tlen1+1)}},
 	    {done,{error,Error,L1},Ics1};
-	{A1,Alen1,_Tlen1,_Ics1,L1,_S1} ->
+	{A1,Alen1,_Tlen1,_Ics1,L1,_S1} ->	%Use last accept match
 	    token_cont(yysuf(Tcs, Alen1), L1, yyaction(A1, Alen1, Tcs, Tline))
     end.
 
@@ -128,17 +132,24 @@ tokens({skip_tokens,State,Line,Tcs,Tlen,Tline,Error,Action,Alen}, Chars, _) ->
 
 tokens(S0, Ics0, L0, Tcs, Tlen0, Tline, Ts, A0, Alen0) ->
     case yystate(S0, Ics0, L0, Tlen0, A0, Alen0) of
-	{A1,Alen1,Ics1,L1} ->			%Accepting end state
+	%% Accepting end state, we have a token.
+	{A1,Alen1,Ics1,L1} ->
 	    tokens_cont(Ics1, L1, yyaction(A1, Alen1, Tcs, Tline), Ts);
-	{A1,Alen1,[],L1,S1} ->			%After an accepting state
+	%% Accepting transition state, can take more chars.
+	{A1,Alen1,[],L1,S1} ->			%Need more chars to check
 	    {more,{tokens,S1,L1,Tcs,Alen1,Tline,Ts,A1,Alen1}};
-	{A1,Alen1,Ics1,L1,_S1} ->
+	{A1,Alen1,Ics1,L1,_S1} ->		%Take what we got
 	    tokens_cont(Ics1, L1, yyaction(A1, Alen1, Tcs, Tline), Ts);
-	{A1,Alen1,Tlen1,[],L1,S1} ->		%After a non-accepting state
+	%% After a non-accepting state, maybe reach accept state later.
+	{A1,Alen1,Tlen1,[],L1,S1} ->		%Need more chars to check
 	    {more,{tokens,S1,L1,Tcs,Tlen1,Tline,Ts,A1,Alen1}};
-	{reject,_Alen1,_Tlen1,eof,L1,_S1} ->	%No token match
-	    {done,if Ts == [] -> {eof,L1};
-		     true -> {ok,yyrev(Ts),L1} end,[]};
+	{reject,_Alen1,Tlen1,eof,L1,_S1} ->	%No token match
+	    %% Check for partial token which is error, no need to skip here.
+	    Ret = if Tlen1 > 0 -> {error,{Tline,?MODULE,{illegal,Tcs}},L1};
+		     Ts == [] -> {eof,L1};
+		     true -> {ok,yyrev(Ts),L1}
+		  end,
+	    {done,Ret,eof};
 	{reject,_Alen1,Tlen1,_Ics1,L1,_S1} ->
 	    %% Skip rest of tokens.
 	    Error = {L1,?MODULE,{illegal,yypre(Tcs, Tlen1+1)}},
@@ -158,7 +169,7 @@ tokens_cont(Rest, Line, {token,T}, Ts) ->
 tokens_cont(Rest, Line, {end_token,T}, Ts) ->
     {done,{ok,yyrev(Ts, [T]),Line},Rest};
 tokens_cont(Rest, Line, skip_token, Ts) ->
-    tokens(yystate(), Rest, Line, Rest, 0, Line,Ts, reject, 0);
+    tokens(yystate(), Rest, Line, Rest, 0, Line, Ts, reject, 0);
 tokens_cont(Rest, Line, {error,S}, _Ts) ->
     skip_tokens(Rest, Line, {Line,?MODULE,{user,S}}).
 
@@ -183,7 +194,7 @@ skip_tokens(S0, Ics0, L0, Tcs, Tlen0, Tline, Error, A0, Alen0) ->
 	{A1,Alen1,Tlen1,[],L1,S1} ->		%After a non-accepting state
 	    {more,{skip_tokens,S1,L1,Tcs,Tlen1,Tline,Error,A1,Alen1}};
 	{reject,_Alen1,_Tlen1,eof,L1,_S1} ->
-	    {done,{error,Error,L1},[]};
+	    {done,{error,Error,L1},eof};
 	{reject,_Alen1,Tlen1,_Ics1,L1,_S1} ->
 	    skip_tokens(yysuf(Tcs, Tlen1+1), L1, Error);
 	{A1,Alen1,_Tlen1,_Ics1,L1,_S1} ->

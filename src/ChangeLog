@@ -1,3 +1,8 @@
+2008-10-25    <rv@DOUGLAS>
+
+	* leexinc.hrl (token, tokens): Fix bug when non-accepting state at
+	eof, no longer ignores incomplete token but signals error.
+
 2008-10-22    <rv@DOUGLAS>
 
 	* leexinc.hrl (token, tokens, skip_tokens): Now use line number of
