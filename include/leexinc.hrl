@@ -86,7 +86,9 @@ token(S0, Ics0, L0, Tcs, Tlen0, Tline, A0, Alen0) ->
 	    {more,{token,S1,Tcs,L1,Tlen1,Tline,A1,Alen1}};
 	{reject,_Alen1,Tlen1,eof,L1,_S1} ->	%No token match
 	    %% Check for partial token which is error.
-	    Ret = if Tlen1 > 0 -> {error,{Tline,?MODULE,{illegal,Tcs}},L1};
+	    Ret = if Tlen1 > 0 -> {error,{Tline,?MODULE,
+					  %% Skip eof tail in Tcs.
+					  {illegal,yypre(Tcs, Tlen1)}},L1};
 		     true -> {eof,L1}
 		  end,
 	    {done,Ret,eof};
@@ -145,7 +147,9 @@ tokens(S0, Ics0, L0, Tcs, Tlen0, Tline, Ts, A0, Alen0) ->
 	    {more,{tokens,S1,L1,Tcs,Tlen1,Tline,Ts,A1,Alen1}};
 	{reject,_Alen1,Tlen1,eof,L1,_S1} ->	%No token match
 	    %% Check for partial token which is error, no need to skip here.
-	    Ret = if Tlen1 > 0 -> {error,{Tline,?MODULE,{illegal,Tcs}},L1};
+	    Ret = if Tlen1 > 0 -> {error,{Tline,?MODULE,
+					  %% Skip eof tail in Tcs.
+					  {illegal,yypre(Tcs, Tlen1)}},L1};
 		     Ts == [] -> {eof,L1};
 		     true -> {ok,yyrev(Ts),L1}
 		  end,
