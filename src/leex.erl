@@ -1,15 +1,15 @@
 %% Copyright (c) 2008 Robert Virding. All rights reserved.
-
+%%
 %% Redistribution and use in source and binary forms, with or without
 %% modification, are permitted provided that the following conditions
 %% are met:
-
+%%
 %% 1. Redistributions of source code must retain the above copyright
 %%    notice, this list of conditions and the following disclaimer.
 %% 2. Redistributions in binary form must reproduce the above copyright
 %%    notice, this list of conditions and the following disclaimer in the
 %%    documentation and/or other materials provided with the distribution.
-
+%%
 %% THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 %% "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 %% LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,7 +24,7 @@
 %% POSSIBILITY OF SUCH DAMAGE.
 
 %%% File    : leex.erl
-%%% Author  : Robert Virding (rvirding@gmail.com)
+%%% Author  : Robert Virding (robert.virding@telia.com)
 %%% Purpose : A Lexical Analyser Generator for Erlang.
 %%%
 %%% Most of the algorithms used here are taken pretty much as
@@ -33,7 +33,6 @@
 %%% Hollub.
 
 -module(leex).
--vsn(0.1).
 
 -export([file/1,file/2,format_error/1]).
 
@@ -139,9 +138,9 @@ format_error({regexp,E})-> ["bad regexp `",regexp:format_error(E),"'"];
 format_error({after_regexp,S}) ->
     ["bad code after regexp ",io_lib:write_string(S)].
 
-gcc_error(File, {Line,Mod,Error})                 ->
+gcc_error(File, {Line,Mod,Error}) ->
     io_lib:format("~s:~w: ~s", [File,Line,apply(Mod, format_error, [Error])]);
-gcc_error(File, {Mod,Error})                      ->
+gcc_error(File, {Mod,Error}) ->
     io_lib:format("~s: ~s", [File,apply(Mod, format_error, [Error])]).
 
 %% parse_file(State) -> {ok,[REA],[Action],Code} | {error,Error}
@@ -572,15 +571,16 @@ pack_dfa([], _, Rs, PDFA) -> {PDFA,Rs}.
 %%  the length of the matching token.
 %%
 %% {Action, AcceptLength, RestChars, Line, State} -
-%%  The scanner has reached an accepting transition state,
-%%  continuation depends on RestChars. If RestChars == [] (no more
-%%  current characters) then we need to get more characters to see if
-%%  it is an end-state, otherwise (eof or chars) then it is an end
-%%  state.
+%%  The scanner has reached an accepting transition state, for example
+%%  after c in regexp "abc(xyz)?", continuation depends on
+%%  RestChars. If RestChars == [] (no more current characters) then we
+%%  need to get more characters to see if it is an end-state,
+%%  otherwise (eof or chars) then we have not found continuing
+%%  characters and it is an end state.
 %%
 %% {reject, AcceptLength, CurrTokLen, RestChars, Line, State} -
 %% {Action, AcceptLength, CurrTokLen, RestChars, Line, State} -
-%%  The scanner has reached a non accepting transistion state. If
+%%  The scanner has reached a non-accepting transistion state. If
 %%  RestChars == [] we need to get more characters to continue.
 %%  Otherwise if 'reject' then no accepting state has been reached it
 %%  is an error. If we have an Action and AcceptLength then these are
@@ -592,8 +592,8 @@ pack_dfa([], _, Rs, PDFA) -> {PDFA,Rs}.
 
 out_file(St0, DFA, DF, Actions, Code) ->
     io:fwrite("Writing file ~s, ", [St0#leex.efile]),
-	LibInc = filename:join(code:lib_dir(leex), "include"),
-	case file:path_open([".","include",LibInc], St0#leex.ifile, [read]) of
+    Incdir = filename:join(code:lib_dir(leex),"include"),
+    case file:path_open([".",Incdir], St0#leex.ifile, [read]) of
 	{ok,Ifile,_} ->
 	    St1 = St0#leex{iport=Ifile},
 	    case file:open(St1#leex.efile, [write]) of

@@ -3,7 +3,8 @@ SOURCE_DIR=src
 INCLUDE_DIR=include
 DOC_DIR=doc
 
-ERLC_FLAGS=-W0 -Ddebug +debug_info
+#ERLC_FLAGS=-W0 -Ddebug +debug_info
+ERLC_FLAGS=-W
 ERLC=erlc -I $(INCLUDE_DIR) -o $(EBIN_DIR) $(ERLC_FLAGS) $(SOURCE_DIR)
 ERL=erl -I -pa ebin -noshell -eval
 
