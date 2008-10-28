@@ -26,10 +26,18 @@ file(FileName, Options) -> ok | error
 
 	The current options are:
 
-	{outdir,Dir} - generate the scanner file in directory Dir
-	dfa_graph    - generate a .dot file which contains a
-		       desciption of the DFA in a format which can be
-		       viewd with Graphviz, www.graphviz.com
+	{includefile,File}
+		Use a specific or customised prologue file instead of
+		default leex/include/leexinc.hrl which is otherwise
+		included.
+
+	{outdir,Dir}
+		generate the scanner file in directory Dir
+
+	dfa_graph
+		generate a .dot file which contains a desciption of
+		the DFA in a format which can be viewd with Graphviz,
+		www.graphviz.com
 
 	Generate a lexical analyzer from the definition in the input
 	file. The input file has the extension .xrl. This is added to

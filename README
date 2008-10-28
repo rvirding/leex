@@ -4,7 +4,8 @@ analyzed and processed by yecc. It is NOT a part of OTP at this point.
 
 v0.2
 ----
-Search for include file in current directory or leex/include lib dir.
+Added includefile option. Search for include file in current directory
+or leex/include lib dir.
 
 Restored text file version of documentation until I edoc and I are in
 agreement.

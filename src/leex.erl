@@ -44,6 +44,8 @@
 
 %% -compile([export_all]).
 
+-define(LEEXINC, "leexinc.hrl").		%Include file
+
 -record(leex, {xfile=[],			%Xrl file
 	       efile=[],			%Erl file
 	       ifile=[],			%Include file
@@ -108,19 +110,23 @@ filenames(File, Opts, St0) ->
     Xfile = filename:join(Dir, Base ++ ".xrl"),
     Efile = Base ++ ".erl",
     Gfile = Base ++ ".dot",
-    Ifile = "leexinc.hrl",
     Module = list_to_atom(Base),
     St1 = St0#leex{xfile=Xfile,
-		   ifile=Ifile,
 		   opts=Opts,
 		   module=Module},
+    %% Test for explicit include file.
+    Ifile = case keysearch(includefile, 1, Opts) of
+		{value,{includefile,I}} -> I;
+		false -> []
+	    end,
     %% Test for explicit out dir.
     case keysearch(outdir, 1, Opts) of
 	{value,{outdir,D}} ->
 	    St1#leex{efile=filename:join(D, Efile),
+		     ifile=Ifile,
 		     gfile=filename:join(D, Gfile)};
-	_ ->
-	    St1#leex{efile=Efile,gfile=Gfile}
+	false ->
+	    St1#leex{efile=Efile,ifile=Ifile,gfile=Gfile}
     end.
 
 close_files(St) ->
@@ -592,8 +598,7 @@ pack_dfa([], _, Rs, PDFA) -> {PDFA,Rs}.
 
 out_file(St0, DFA, DF, Actions, Code) ->
     io:fwrite("Writing file ~s, ", [St0#leex.efile]),
-    Incdir = filename:join(code:lib_dir(leex),"include"),
-    case file:path_open([".",Incdir], St0#leex.ifile, [read]) of
+    case open_inc_file(St0) of
 	{ok,Ifile,_} ->
 	    St1 = St0#leex{iport=Ifile},
 	    case file:open(St1#leex.efile, [write]) of
@@ -615,6 +620,15 @@ out_file(St0, DFA, DF, Actions, Code) ->
 	    error
     end.
 
+open_inc_file(#leex{ifile=[]}) ->		%Use default
+    Incdir = filename:join(code:lib_dir(leex),"include"),
+    file:path_open([".",Incdir], ?LEEXINC, [read]);
+open_inc_file(St) ->				%Use specified file
+    case file:open(St#leex.ifile, [read]) of
+	{ok,F} -> {ok,F,St#leex.ifile};		%Return same format
+	Error -> Error
+    end.
+    
 %% out_file(IncFile, OutFile, ModName, DFA, DfaStart, Actions, Code) -> ok.
 %%  Copy the include file line by line substituting special lines with
 %%  generated code. We cheat by only looking at the first 5

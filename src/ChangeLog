@@ -2,6 +2,7 @@
 
 	* leex.erl (out_file): Search for include file in current
 	directory or leex/include lib dir.
+	(filenames, open_inc_file): Added includefile option.
 
 2008-10-25    <rv@DOUGLAS>
 
