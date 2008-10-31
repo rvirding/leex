@@ -1,3 +1,7 @@
+2008-10-31    <rv@DOUGLAS>
+
+	* All files: Released Leex 0.2 to Git.
+
 2008-10-28    <rv@DOUGLAS>
 
 	* leex.erl (out_file): Search for include file in current
