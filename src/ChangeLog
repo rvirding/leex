@@ -1,24 +1,32 @@
-2008-10-31    <rv@DOUGLAS>
+2008-12-15  Robert Virding  <rv@arthur>
+
+	* leexinc.hrl (string_cont, token_cont, tokens_cont)
+	(skip_tokens): Added pushback returns.
+
+	* leex.erl (collect_rule): Fixed regexp to allow for no
+	terminating blanks and ':' on next line.
+
+2008-10-31  Robert Virding  <rv@DOUGLAS>
 
 	* All files: Released Leex 0.2 to Git.
 
-2008-10-28    <rv@DOUGLAS>
+2008-10-28  Robert Virding  <rv@DOUGLAS>
 
 	* leex.erl (out_file): Search for include file in current
 	directory or leex/include lib dir.
 	(filenames, open_inc_file): Added includefile option.
 
-2008-10-25    <rv@DOUGLAS>
+2008-10-25  Robert Virding  <rv@DOUGLAS>
 
 	* leexinc.hrl (token, tokens): Fix bug when non-accepting state at
 	eof, no longer ignores incomplete token but signals error.
 
-2008-10-22    <rv@DOUGLAS>
+2008-10-22  Robert Virding  <rv@DOUGLAS>
 
 	* leexinc.hrl (token, tokens, skip_tokens): Now use line number of
 	token start, which is much better.
 
-2008-10-21    <rv@DOUGLAS>
+2008-10-21  Robert Virding  <rv@DOUGLAS>
 
 	* leexinc.hrl (string): Now use line number of token start, which
 	is much better.

@@ -245,7 +245,7 @@ parse_rules(Ifile, NextLine, Ms, REAs, As, N) ->
 %% action has been read. Keep track of line number.
 
 collect_rule(Ifile, Chars, L0) ->
-    {match,St,Len} = regexp:first_match(Chars, "[^ \t]+"),
+    {match,St,Len} = regexp:first_match(Chars, "[^ \t\r\n]+"),
     %%io:fwrite("RE = ~p~n", [substr(Chars, St, Len)]),
     case collect_action(Ifile, substr(Chars, St+Len), L0, []) of
 	{ok,[{':',_}|Toks],L1} -> {ok,substr(Chars, St, Len),Toks,L1};
@@ -309,7 +309,7 @@ parse_rule_regexp(RE0, [{M,Exp}|Ms]) ->
 	    parse_rule_regexp(RE0, Ms)
     end;
 parse_rule_regexp(RE, []) ->
-    %% io:fwrite("RE = ~p~n", [RE]),
+    %%io:fwrite("RE = ~p~n", [RE]),
     regexp:parse(RE).
 
 sub_repl([{St,L}|Ss], Rep, S, Pos) ->

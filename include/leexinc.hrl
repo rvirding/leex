@@ -41,14 +41,24 @@ string(Ics0, L0, Tcs, Ts) ->
     end.
 
 %% string_cont(RestChars, Line, Token, Tokens)
-%%  Test for and remove the end token wrapper.
+%%  Test for and remove the end token wrapper. Push back characters
+%%  are prepended to RestChars.
 
 string_cont(Rest, Line, {token,T}, Ts) ->
     string(Rest, Line, Rest, [T|Ts]);
+string_cont(Rest, Line, {token,T,Push}, Ts) ->
+    NewRest = Push ++ Rest,
+    string(NewRest, Line, NewRest, [T|Ts]);
 string_cont(Rest, Line, {end_token,T}, Ts) ->
     string(Rest, Line, Rest, [T|Ts]);
+string_cont(Rest, Line, {end_token,T,Push}, Ts) ->
+    NewRest = Push ++ Rest,
+    string(NewRest, Line, NewRest, [T|Ts]);
 string_cont(Rest, Line, skip_token, Ts) ->
     string(Rest, Line, Rest, Ts);
+string_cont(Rest, Line, {skip_token,Push}, Ts) ->
+    NewRest = Push ++ Rest,
+    string(NewRest, Line, NewRest, Ts);
 string_cont(_Rest, Line, {error,S}, _Ts) ->
     {error,{Line,?MODULE,{user,S}},Line}.
 
@@ -105,10 +115,19 @@ token(S0, Ics0, L0, Tcs, Tlen0, Tline, A0, Alen0) ->
 
 token_cont(Rest, Line, {token,T}) ->
     {done,{ok,T,Line},Rest};
+token_cont(Rest, Line, {token,T,Push}) ->
+    NewRest = Push ++ Rest,
+    {done,{ok,T,Line},NewRest};
 token_cont(Rest, Line, {end_token,T}) ->
     {done,{ok,T,Line},Rest};
+token_cont(Rest, Line, {end_token,T,Push}) ->
+    NewRest = Push ++ Rest,
+    {done,{ok,T,Line},NewRest};
 token_cont(Rest, Line, skip_token) ->
     token(yystate(), Rest, Line, Rest, 0, Line, reject, 0);
+token_cont(Rest, Line, {skip_token,Push}) ->
+    NewRest = Push ++ Rest,
+    token(yystate(), NewRest, Line, NewRest, 0, Line, reject, 0);
 token_cont(Rest, Line, {error,S}) ->
     {done,{error,{Line,?MODULE,{user,S}},Line},Rest}.
 
@@ -170,10 +189,19 @@ tokens(S0, Ics0, L0, Tcs, Tlen0, Tline, Ts, A0, Alen0) ->
 
 tokens_cont(Rest, Line, {token,T}, Ts) ->
     tokens(yystate(), Rest, Line, Rest, 0, Line, [T|Ts], reject, 0);
+tokens_cont(Rest, Line, {token,T,Push}, Ts) ->
+    NewRest = Push ++ Rest,
+    tokens(yystate(), NewRest, Line, NewRest, 0, Line, [T|Ts], reject, 0);
 tokens_cont(Rest, Line, {end_token,T}, Ts) ->
     {done,{ok,yyrev(Ts, [T]),Line},Rest};
+tokens_cont(Rest, Line, {end_token,T,Push}, Ts) ->
+    NewRest = Push ++ Rest,
+    {done,{ok,yyrev(Ts, [T]),Line},NewRest};
 tokens_cont(Rest, Line, skip_token, Ts) ->
     tokens(yystate(), Rest, Line, Rest, 0, Line, Ts, reject, 0);
+tokens_cont(Rest, Line, {skip_token,Push}, Ts) ->
+    NewRest = Push ++ Rest,
+    tokens(yystate(), NewRest, Line, NewRest, 0, Line, Ts, reject, 0);
 tokens_cont(Rest, Line, {error,S}, _Ts) ->
     skip_tokens(Rest, Line, {Line,?MODULE,{user,S}}).
 
@@ -212,11 +240,20 @@ skip_tokens(S0, Ics0, L0, Tcs, Tlen0, Tline, Error, A0, Alen0) ->
 
 skip_cont(Rest, Line, {token,_T}, Error) ->
     skip_tokens(yystate(), Rest, Line, Rest, 0, Line, Error, reject, 0);
+skip_cont(Rest, Line, {token,_T,Push}, Error) ->
+    NewRest = Push ++ Rest,
+    skip_tokens(yystate(), NewRest, Line, NewRest, 0, Line, Error, reject, 0);
 skip_cont(Rest, Line, {end_token,_T}, Error) ->
     {done,{error,Error,Line},Rest};
-skip_cont(Rest, Line, {error,_S}, Error) ->
-    skip_tokens(yystate(), Rest, Line, Rest, 0, Line, Error, reject, 0);
+skip_cont(Rest, Line, {end_token,_T,Push}, Error) ->
+    NewRest = Push ++ Rest,
+    {done,{error,Error,Line},NewRest};
 skip_cont(Rest, Line, skip_token, Error) ->
+    skip_tokens(yystate(), Rest, Line, Rest, 0, Line, Error, reject, 0);
+skip_cont(Rest, Line, {skip_token,Push}, Error) ->
+    NewRest = Push ++ Rest,
+    skip_tokens(yystate(), NewRest, Line, NewRest, 0, Line, Error, reject, 0);
+skip_cont(Rest, Line, {error,_S}, Error) ->
     skip_tokens(yystate(), Rest, Line, Rest, 0, Line, Error, reject, 0).
 
 yyrev(List) -> lists:reverse(List).

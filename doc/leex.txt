@@ -166,6 +166,20 @@ Input File Format
 	{error,ErrString} - an error in the token, ErrString is a string
 			    describing the error
 
+	It is also possible to push back characters into the input
+	characters with the following returns:
+
+	{token,Token,PushBackList}
+	{end_token,Token,PushBackList}
+	{skip_token,PushBackList}
+
+	These have the same meanings as the normal returns but the
+	characters in PushBackList will be prepended to the input
+	characters and scanned for the next token. Note that pushing
+	back a newline will mean the line numbering will no longer be
+	correct. N.B. Pushing back characters gives you unexpected
+	possibilities to cause the scanner to loop!
+
 	The following example would match a simple Erlang integer or
 	float and return a token which could be sent to the Erlang
 	parser:
