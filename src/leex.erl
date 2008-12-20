@@ -41,6 +41,7 @@
 		map/2,foldl/3,foldr/3,foreach/2]).
 -import(string, [substr/2,substr/3,span/2,tokens/2]).
 -import(ordsets, [is_element/2,add_element/2,union/2,subtract/2]).
+-import(orddict, [store/3]).
 
 %% -compile([export_all]).
 
@@ -74,19 +75,10 @@ file(File, Opts) ->
     try
 	case parse_file(St1) of
 	    {ok,REAs,Actions,Code} ->
-		{NFA,NF} = build_combined_nfa(REAs),
-		io:fwrite("NFA contains ~w states, ", [size(NFA)]),
-		{DFA0,DF0} = build_dfa(NFA, NF),
-		io:fwrite("DFA contains ~w states, ", [length(DFA0)]),
-		{DFA,DF} = minimise_dfa(DFA0, DF0),
-		io:fwrite("minimised to ~w states.~n", [length(DFA)]),
-		%% io:fwrite("~p\n", [{NF,NFA}]),
-		%% io:fwrite("~p\n", [{DF,DFA}]),
+		{DFA,DF} = make_dfa(REAs, St1),
 		Ret = out_file(St1, DFA, DF, Actions, Code),
-		case member(dfa_graph, Opts) of
-		    true -> out_dfa_graph(St1, DFA, DF);
-		    false -> ok
-		end,
+		when_opt(fun () -> out_dfa_graph(St1, DFA, DF) end,
+			 dfa_graph, Opts),
 		Ret;				%The important return!
 	    {error,PError} ->
 		io:put_chars([$\n,gcc_error(St1#leex.xfile, PError),$\n]),
@@ -148,6 +140,15 @@ gcc_error(File, {Line,Mod,Error}) ->
     io_lib:format("~s:~w: ~s", [File,Line,apply(Mod, format_error, [Error])]);
 gcc_error(File, {Mod,Error}) ->
     io_lib:format("~s: ~s", [File,apply(Mod, format_error, [Error])]).
+
+when_opt(Do, Opt, Opts) ->
+    case member(Opt, Opts) of
+	true -> Do();
+	false -> ok
+    end.
+
+verbose_print(St, Format, Args) ->
+    when_opt(fun () -> io:fwrite(Format, Args) end, verbose, St#leex.opts).
 
 %% parse_file(State) -> {ok,[REA],[Action],Code} | {error,Error}
 %%  when
@@ -165,10 +166,10 @@ parse_file(St0) ->
     case file:open(St0#leex.xfile, [read]) of
 	{ok,Xfile} ->
 	    St1 = St0#leex{xport=Xfile},
-	    io:fwrite("Parsing file ~s, ", [St1#leex.xfile]),
+	    verbose_print(St1, "Parsing file ~s, ", [St1#leex.xfile]),
 	    case parse_head(Xfile) of
 		{ok,REAs,Actions,Code} ->
-		    io:fwrite("contained ~w rules.~n", [length(REAs)]),
+		    verbose_print(St1, "contained ~w rules.~n", [length(REAs)]),
 		    file:close(Xfile),
 		    {ok,REAs,Actions,Code};
 		Error ->
@@ -337,6 +338,38 @@ nextline(Ifile, L) ->
 	    end
     end.
 
+%% We use standard methods, Thompson's construction and subset
+%% construction, to create first an NFA and then a DFA from the
+%% regexps. A non-standard feature is that we work with sets of
+%% character ranges (crs) instead sets of characters. This is most
+%% noticeable when constructing DFAs. The major benefit is that we can
+%% handle characters from any set, not just limited ASCII or 8859,
+%% even 16/32 bit unicode.
+%%
+%% The whole range of characters is 0-maxchar, where maxchar is a BIG
+%% number. We don't make any assumptions about the size of maxchar, it
+%% is just bigger than any character.
+%%
+%% Using character ranges makes describing many regexps very simple,
+%% for example the regexp "." just becomes the range
+%% [{0-9},{11-maxchar}].
+
+%% make_nfa(RegExpActions) -> {ok,{NFA,StartState}} | {error,E}.
+%% Build a complete nfa from a list of {RegExp,Action}. The NFA field
+%% accept has values {yes,Action}|no. The NFA is a list of states.
+
+make_dfa(REAs, St) ->
+    {NFA,NF} = build_combined_nfa(REAs),
+    verbose_print(St, "NFA contains ~w states, ", [size(NFA)]),
+    {DFA0,DF0} = build_dfa(NFA, NF),
+    verbose_print(St, "DFA contains ~w states, ", [length(DFA0)]),
+    {DFA,DF} = minimise_dfa(DFA0, DF0),
+    verbose_print(St, "minimised to ~w states.~n", [length(DFA)]),
+    %%io:fwrite("~p\n", [{NF,NFA}]),
+    %%io:fwrite("~p\n", [{DF0,DFA0}]),
+    %%io:fwrite("~p\n", [{DF,DFA}]),
+    {DFA,DF}.
+
 %% build_combined_nfa(RegExpActionList) -> {NFA,FirstState}.
 %%  Build the combined NFA using Thompson's construction straight out
 %%  of the book. Build the separate NFAs in the same order as the
@@ -407,13 +440,37 @@ build_nfa({char_class,Cc}, N, F, NFA) ->
 build_nfa({comp_class,Cc}, N, F, NFA) ->
     {[#nfa_state{no=F,edges=[{comp_class(Cc),N}]}|NFA],N+1,N};
 build_nfa(C, N, F, NFA) when integer(C) ->
-    {[#nfa_state{no=F,edges=[{[C],N}]}|NFA],N+1,N}.
+    {[#nfa_state{no=F,edges=[{[{C,C}],N}]}|NFA],N+1,N}.
 
 char_class(Cc) ->
-    lists:foldl(fun ({C1,C2}, Set) -> union(seq(C1, C2), Set);
-		    (C, Set) -> add_element(C, Set) end, [], Cc).
+    Crs = lists:foldl(fun ({C1,C2}, Set) -> add_element({C1,C2}, Set);
+			  (C, Set) -> add_element({C,C}, Set)
+		      end, ordsets:new(), Cc),
+    pack_crs(Crs).
 
-comp_class(Cc) -> subtract(seq(0, 255), char_class(Cc)).
+pack_crs([{C1,C2}=Cr,{C3,C4}|Crs]) when C1 =< C3, C2 >= C4 ->
+    %% C1      C2
+    %%   C3  C4
+    pack_crs([Cr|Crs]);
+pack_crs([{C1,C2},{C3,C4}|Crs]) when C2 >= C3, C2 < C4 ->
+    %% C1    C2
+    %%    C3   C4
+    pack_crs([{C1,C4}|Crs]);
+pack_crs([{C1,C2},{C3,C4}|Crs]) when C2 + 1 == C3 ->
+    %% C1   C2
+    %%        C3  C4
+    pack_crs([{C1,C4}|Crs]);
+pack_crs([Cr|Crs]) -> [Cr|pack_crs(Crs)];
+pack_crs([]) -> [].
+
+comp_class(Cc) ->
+    Crs = char_class(Cc),
+    %%io:fwrite("comp: ~p\n", [Crs]),
+    comp_crs(Crs, 0).
+
+comp_crs([{C1,C2}|Crs], Last) ->
+    [{Last,C1-1}|comp_crs(Crs, C2+1)];
+comp_crs([], Last) -> [{Last,maxchar}].
 
 %% build_dfa(NFA, NfaFirstState) -> {DFA,DfaFirstState}.
 %%  Build a DFA from an NFA using "subset construction". The major
@@ -434,32 +491,75 @@ build_dfa(NFA, Nf) ->
 %%  marked list afterwards with correct translations.
 
 build_dfa([U|Us0], N0, Ms, NFA) ->
-    {Ts,Us1,N1} = build_dfa(255, U#dfa_state.nfa, Us0, N0, [], [U|Ms], NFA),
+    {Ts,Us1,N1} = build_dfa(U#dfa_state.nfa, Us0, N0, [], [U|Ms], NFA),
     M = U#dfa_state{trans=Ts,accept=accept(U#dfa_state.nfa, NFA)},
     build_dfa(Us1, N1, [M|Ms], NFA);
 build_dfa([], _, Ms, _) -> Ms.
 
-%% build_dfa(Char, [NfaState], [Unmarked], NextState, [Transition], [Marked], NFA) ->
+%% build_dfa([NfaState], [Unmarked], NextState, [Transition], [Marked], NFA) ->
 %%	{Transitions,UnmarkedStates,NextState}.
 %%  Foreach NFA state set calculate the legal translations. N.B. must
 %%  search *BOTH* the unmarked and marked lists to check if DFA state
-%%  already exists. By test characters downwards and prepending
-%%  transitions we get the transition lists in ascending order.
+%%  already exists. As the range of characters is potentially VERY
+%%  large we cannot explicitly test all characters. Instead we first
+%%  calculate the set of all disjoint character ranges which are
+%%  possible candidates to the set of NFA states. The transitions are
+%%  an orddict so we get the transition lists in ascending order.
 
-build_dfa(C, Set, Us, N, Ts, Ms, NFA) when C >= 0 ->
-    case eclosure(move(Set, C, NFA), NFA) of
+build_dfa(Set, Us, N, Ts, Ms, NFA) ->
+    %% List of all transition sets.
+    Crs0 = [Cr || S <- Set,
+		  {Crs,_St} <- (element(S, NFA))#nfa_state.edges,
+		  list(Crs),
+		  Cr <- Crs ],
+    Crs1 = lists:usort(Crs0),			%Must remove duplicates!
+    %% Build list of disjoint test ranges.
+    Test = disjoint_crs(Crs1),
+    %%io:fwrite("bd: ~p\n    ~p\n    ~p\n    ~p\n", [Set,Crs0,Crs1,Test]),
+    build_dfa(Test, Set, Us, N, Ts, Ms, NFA).
+
+%% disjoint_crs([CharRange]) -> [CharRange].
+%%  Take a sorted list of char ranges and make a sorted list of
+%%  disjoint char ranges. No new char range extends past an existing
+%%  char range.
+
+disjoint_crs([{_C1,C2}=Cr1,{C3,_C4}=Cr2|Crs]) when C2 < C3 ->
+    %% C1  C2
+    %%        C3  C4
+    [Cr1|disjoint_crs([Cr2|Crs])];
+disjoint_crs([{C1,C2},{C3,C4}|Crs]) when C1 == C3 ->
+    %% C1     C2
+    %% C3       C4
+    [{C1,C2}|disjoint_crs(add_element({C2+1,C4}, Crs))];
+disjoint_crs([{C1,C2},{C3,C4}|Crs]) when C1 < C3, C2 >= C3, C2 < C4 ->
+    %% C1     C2
+    %%    C3     C4
+    [{C1,C3-1}|disjoint_crs(union([{C3,C2},{C2+1,C4}], Crs))];
+disjoint_crs([{C1,C2},{C3,C4}|Crs]) when C1 < C3, C2 == C4 ->
+    %% C1      C2
+    %%    C3   C4
+    [{C1,C3-1}|disjoint_crs(add_element({C3,C4}, Crs))];
+disjoint_crs([{C1,C2},{C3,C4}|Crs]) when C1 < C3, C2 > C4 ->
+    %% C1        C2
+    %%    C3   C4
+    [{C1,C3-1}|disjoint_crs(union([{C3,C4},{C4+1,C2}], Crs))];
+disjoint_crs([Cr|Crs]) -> [Cr|disjoint_crs(Crs)];
+disjoint_crs([]) -> [].
+
+build_dfa([Cr|Crs], Set, Us, N, Ts, Ms, NFA) ->
+    case eclosure(move(Set, Cr, NFA), NFA) of
 	S when S /= [] ->
 	    case dfa_state_exist(S, Us, Ms) of
 		{yes,T} ->
-		    build_dfa(C-1, Set, Us, N, [{C,T}|Ts], Ms, NFA);
+		    build_dfa(Crs, Set, Us, N, store(Cr, T, Ts), Ms, NFA);
 		no ->
 		    U = #dfa_state{no=N,nfa=S},
-		    build_dfa(C-1, Set, [U|Us], N+1, [{C,N}|Ts], Ms, NFA)
+		    build_dfa(Crs, Set, [U|Us], N+1, store(Cr, N, Ts), Ms, NFA)
 	    end;
 	[] ->
-	    build_dfa(C-1, Set, Us, N, Ts, Ms, NFA)
+	    build_dfa(Crs, Set, Us, N, Ts, Ms, NFA)
     end;
-build_dfa(-1, _, Us, N, Ts, _, _) ->
+build_dfa([], _, Us, N, Ts, _, _) ->
     {Ts,Us,N}.
 
 %% dfa_state_exist(Set, Unmarked, Marked) -> {yes,State} | no.
@@ -488,11 +588,20 @@ eclosure([St|Sts], NFA, Ec) ->
 	     NFA, add_element(St, Ec));
 eclosure([], _, Ec) -> Ec.
 
-move(Sts, C, NFA) ->
-    [St || N <- Sts,
-	   {C1,St} <- (element(N, NFA))#nfa_state.edges,
-	   list(C1),
-	   member(C, C1) ].
+move(Sts, Cr, NFA) ->
+    [ St || N <- Sts,
+	    {Crs,St} <- (element(N, NFA))#nfa_state.edges,
+	    list(Crs),
+%% 	    begin
+%% 		io:fwrite("move1: ~p\n", [{Sts,Cr,Crs,in_crs(Cr,Crs)}]),
+%% 		true
+%% 	    end,
+	    in_crs(Cr, Crs) ].
+
+in_crs({C1,C2}, [{C3,C4}|_Crs]) when C1 >= C3, C2 =< C4 -> true;
+in_crs(Cr, [Cr|_Crs]) -> true;			%Catch bos and eos.
+in_crs(Cr, [_|Crs]) -> in_crs(Cr, Crs);
+in_crs(_Cr, []) -> false.
 
 %% accept([State], NFA) -> {accept,A} | noaccept.
 %%  Scan down the state list until we find an accepting state.
@@ -554,8 +663,7 @@ pack_dfa(DFA) -> pack_dfa(DFA, 0, [], []).
 
 pack_dfa([D|DFA], NewN, Rs, PDFA) ->
     pack_dfa(DFA, NewN+1,
-	     [{D#dfa_state.no,NewN}|Rs],
-	     [D#dfa_state{no=NewN}|PDFA]);
+	     [{D#dfa_state.no,NewN}|Rs], [D#dfa_state{no=NewN}|PDFA]);
 pack_dfa([], _, Rs, PDFA) -> {PDFA,Rs}.
 
 %% The main output is the yystate function which is built from the
@@ -597,7 +705,7 @@ pack_dfa([], _, Rs, PDFA) -> {PDFA,Rs}.
 %%  the code for the action.s
 
 out_file(St0, DFA, DF, Actions, Code) ->
-    io:fwrite("Writing file ~s, ", [St0#leex.efile]),
+    verbose_print(St0, "Writing file ~s, ", [St0#leex.efile]),
     case open_inc_file(St0) of
 	{ok,Ifile,_} ->
 	    St1 = St0#leex{iport=Ifile},
@@ -608,8 +716,8 @@ out_file(St0, DFA, DF, Actions, Code) ->
 			     DFA, DF, Actions, Code),
 		    file:close(Ifile),
 		    file:close(Ofile),
-		    io:fwrite("ok~n"),
-		    ok;
+		    verbose_print(St2, "ok~n", []),
+		    {ok,St1#leex.efile};
 		{error,_} ->
 		    file:close(Ifile),
 		    io:fwrite("~s: open error~n", [St1#leex.efile]),
@@ -669,79 +777,104 @@ out_trans(File, #dfa_state{no=N,trans=Tr,accept=noaccept}) ->
     io:fwrite(File, "yystate(~w, Ics, Line, Tlen, Action, Alen) ->~n", [N]),
     io:fwrite(File, "    {Action,Alen,Tlen,Ics,Line,~w};~n", [N]).
 
+out_accept_tran(File, N, A, {{Cf,maxchar},S}) ->
+    out_accept_head_max(File, N, Cf),
+    out_accept_body(File, S, "Line", A);
 out_accept_tran(File, N, A, {{Cf,Cl},S}) ->
-    out_accept_head(File, N, io_lib:write_char(Cf), io_lib:write_char(Cl)),
+    out_accept_head_range(File, N, Cf, Cl),
     out_accept_body(File, S, "Line", A);
 out_accept_tran(File, N, A, {$\n,S}) ->
-    out_accept_head(File, N, "$\\n"),
+    out_accept_head_1(File, N, $\n),
     out_accept_body(File, S, "Line+1", A);
 out_accept_tran(File, N, A, {C,S}) ->
-    Char = io_lib:write_char(C),
-    out_accept_head(File, N, Char),
+    out_accept_head_1(File, N, C),
     out_accept_body(File, S, "Line", A).
 
-out_noaccept_tran(File, N, {{Cf,Cl},S}) ->
-    out_noaccept_head(File, N, io_lib:write_char(Cf), io_lib:write_char(Cl)),
-    out_noaccept_body(File, S, "Line");
-out_noaccept_tran(File, N, {$\n,S}) ->
-    out_noaccept_head(File, N, "$\\n"),
-    out_noaccept_body(File, S, "Line+1");
-out_noaccept_tran(File, N, {C,S}) ->
-    Char = io_lib:write_char(C),
-    out_noaccept_head(File, N, Char),
-    out_noaccept_body(File, S, "Line").
+out_accept_head_1(File, State, Char) ->
+    out_head_1(File, State, Char, "_", "_").
 
-out_accept_head(File, State, Char) ->
-    io:fwrite(File, "yystate(~w, [~s|Ics], Line, Tlen, _, _) ->\n",
-	      [State,Char]).
+out_accept_head_max(File, State, Min) ->
+    out_head_max(File, State, Min, "_", "_").
 
-out_accept_head(File, State, Min, Max) ->
-    io:fwrite(File, "yystate(~w, [C|Ics], Line, Tlen, _, _) when C >= ~s, C =< ~s ->\n",
-	      [State,Min,Max]).
+out_accept_head_range(File, State, Min, Max) ->
+    out_head_range(File, State, Min, Max, "_", "_").
 
 out_accept_body(File, Next, Line, Action) ->
-    io:fwrite(File, "    yystate(~w, Ics, ~s, Tlen+1, ~w, Tlen);\n",
-	      [Next,Line,Action]).
+    out_body(File, Next, Line, io_lib:write(Action), "Tlen").
 
-out_noaccept_head(File, State, Char) ->
-    io:fwrite(File, "yystate(~w, [~s|Ics], Line, Tlen, Action, Alen) ->\n",
-	      [State,Char]).
+out_noaccept_tran(File, N, {{Cf,maxchar},S}) ->
+    out_noaccept_head_max(File, N, Cf),
+    out_noaccept_body(File, S, "Line");
+out_noaccept_tran(File, N, {{Cf,Cl},S}) ->
+    out_noaccept_head_range(File, N, Cf, Cl),
+    out_noaccept_body(File, S, "Line");
+out_noaccept_tran(File, N, {$\n,S}) ->
+    out_noaccept_head_1(File, N, $\n),
+    out_noaccept_body(File, S, "Line+1");
+out_noaccept_tran(File, N, {C,S}) ->
+    out_noaccept_head_1(File, N, C),
+    out_noaccept_body(File, S, "Line").
 
-out_noaccept_head(File, State, Min, Max) ->
-    io:fwrite(File, "yystate(~w, [C|Ics], Line, Tlen, Action, Alen) when C >= ~s, C =< ~s ->\n",
-	      [State,Min,Max]).
+out_noaccept_head_1(File, State, Char) ->
+    out_head_1(File, State, Char, "Action", "Alen").
+
+out_noaccept_head_max(File, State, Min) ->
+    out_head_max(File, State, Min, "Action", "Alen").
+
+out_noaccept_head_range(File, State, Min, Max) ->
+    out_head_range(File, State, Min, Max, "Action", "Alen").
 
 out_noaccept_body(File, Next, Line) ->
-    io:fwrite(File, "    yystate(~w, Ics, ~s, Tlen+1, Action, Alen);\n",
-	      [Next,Line]).
+    out_body(File, Next, Line, "Action", "Alen").
 
-%% pack_trans([{Char,State}]) -> [{Crange,State}] when
+out_head_1(File, State, Char, Action, Alen) ->
+    io:fwrite(File, "yystate(~w, [~w|Ics], Line, Tlen, ~s, ~s) ->\n",
+	      [State,Char,Action,Alen]).
+
+out_head_max(File, State, Min, Action, Alen) ->
+    io:fwrite(File, "yystate(~w, [C|Ics], Line, Tlen, ~s, ~s) when C >= ~w ->\n",
+	      [State,Action,Alen,Min]).
+
+out_head_range(File, State, Min, Max, Action, Alen) ->
+    io:fwrite(File, "yystate(~w, [C|Ics], Line, Tlen, ~s, ~s) when C >= ~w, C =< ~w ->\n",
+	      [State,Action,Alen,Min,Max]).
+
+out_body(File, Next, Line, Action, Alen) ->
+    io:fwrite(File, "    yystate(~w, Ics, ~s, Tlen+1, ~s, ~s);\n",
+	      [Next,Line,Action,Alen]).
+
+%% pack_trans([{Crange,State}]) -> [{Crange,State}] when
 %%	Crange = {Char,Char} | Char.
 %%  Pack the translation table into something more suitable for
-%%  generating code. Ranges of characters with the same State are
-%%  packed together, while solitary characters are left "as is". We
-%%  KNOW how the pattern matching compiler works so solitary
-%%  characters are stored before ranges. We do this using ordsets for
-%%  for the packed table. Always break out $\n as solitary character.
+%%  generating code. We KNOW how the pattern matching compiler works
+%%  so solitary characters are stored before ranges. We do this by
+%%  prepending singletons to the front of the packed transitions and
+%%  appending ranges to the back. This preserves the smallest to
+%%  largest order of ranges. Newline characters, $\n, are always
+%%  extracted and handled as singeltons.
 
-pack_trans(Tr) -> pack_trans(Tr, []).
+pack_trans(Trs) -> pack_trans(Trs, []).
 
-pack_trans([{C,S}|Tr], Pt) -> pack_trans(Tr, C, C, S, Pt);
+%% pack_trans(Trs) ->
+%%     Trs1 = pack_trans(Trs, []),
+%%     io:fwrite("tr:~p\n=> ~p\n", [Trs,Trs1]),
+%%     Trs1.
+
+pack_trans([{{C,C},S}|Trs], Pt) ->		%Singletons to the head
+    pack_trans(Trs, [{C,S}|Pt]);
+%% Special detection and handling of $\n.
+pack_trans([{{Cf,$\n},S}|Trs], Pt) ->
+    pack_trans([{{Cf,$\n-1},S}|Trs], [{$\n,S}|Pt]);
+pack_trans([{{$\n,Cl},S}|Trs], Pt) ->
+    pack_trans([{{$\n+1,Cl},S}|Trs], [{$\n,S}|Pt]);
+pack_trans([{{Cf,Cl},S}|Trs], Pt) when Cf < $\n, Cl > $\n ->
+    pack_trans([{{Cf,$\n-1},S},{{$\n+1,Cl},S}|Trs], [{$\n,S}|Pt]);
+%% Small ranges become singletons.
+pack_trans([{{Cf,Cl},S}|Trs], Pt) when Cl == Cf + 1 ->
+    pack_trans(Trs, [{Cf,S},{Cl,S}|Pt]);
+pack_trans([Tr|Trs], Pt) ->			%The default uninteresting case
+    pack_trans(Trs, Pt ++ [Tr]);
 pack_trans([], Pt) -> Pt.
-
-pack_trans([{$\n,S1}|Tr], Cf, Cl, S, Pt0) ->
-    Pt1 = pack_trans(Cf, Cl, S, Pt0),		%Take what we got ...
-    Pt2 = add_element({$\n,S1}, Pt1),		%add separate $\n ...
-    pack_trans(Tr, Pt2);			%and keep going
-pack_trans([{C,S}|Tr], Cf, Cl, S, Pt) when C == Cl + 1 ->
-    pack_trans(Tr, Cf, C, S, Pt);		%Add to range
-pack_trans(Tr, Cf, Cl, S, Pt) ->
-    pack_trans(Tr, pack_trans(Cf, Cl, S, Pt)).
-
-pack_trans(C, C, S, Pt) -> add_element({C,S}, Pt);
-pack_trans(Cf, Cl, S, Pt) when Cl == Cf + 1 ->
-    add_element({Cf,S}, add_element({Cl,S}, Pt));
-pack_trans(Cf, Cl, S, Pt) -> add_element({{Cf,Cl},S}, Pt).
 
 %% out_actions(File, ActionList) -> ok.
 %% Write out the action table.

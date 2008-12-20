@@ -1,3 +1,17 @@
+2008-12-21  Robert Virding  <rv@arthur>
+
+	* leex.erl: Added verbose flag to control printing status.
+
+2008-12-20  Robert Virding  <rv@arthur>
+
+	* leex.erl (make_dfa): Rewriting making NFA and DFA to be able to
+	handle any size char set.
+	(build_nfa): All transitions now char ranges.
+	(build_dfa): Step over ranges in states, not over all possible
+	chars.
+	(out_dfa): Now handle input ranges, prints all characters as
+	integers to handle any size.
+
 2008-12-15  Robert Virding  <rv@arthur>
 
 	* leexinc.hrl (string_cont, token_cont, tokens_cont)

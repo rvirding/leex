@@ -1,0 +1,7 @@
+Some things which could/should be added in no special order:
+
+- Add lookahead capability. (But what syntax?)
+
+- Extend leex to be able to handle full unicode size characters. Needs
+  a revised algorithm as stepping over all possible characters would
+  not be feasible. Have one.
