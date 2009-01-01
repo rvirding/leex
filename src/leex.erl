@@ -47,6 +47,10 @@
 
 -define(LEEXINC, "leexinc.hrl").		%Include file
 
+-define(DEFS_HEAD, "Definitions.").
+-define(RULE_HEAD, "Rules.").
+-define(CODE_HEAD, "Erlang code.").
+
 -record(leex, {xfile=[],			%Xrl file
 	       efile=[],			%Erl file
 	       ifile=[],			%Include file
@@ -129,8 +133,10 @@ close_files(St) ->
     MaybeClose(St#leex.gport).
 
 format_error({open,F}) -> ["error opening ",io_lib:write_string(F)];
-format_error(missing_defs) -> "missing definitions";
-format_error(missing_rules) -> "missing rules";
+format_error(missing_defs) -> "missing Definitions";
+format_error(missing_rules) -> "missing Rules";
+format_error(missing_code) -> "missing Erlang code";
+format_error(empty_rules) -> "no rules";
 format_error(bad_rule) -> "bad rule";
 format_error({regexp,E})-> ["bad regexp `",regexp:format_error(E),"'"];
 format_error({after_regexp,S}) ->
@@ -181,14 +187,14 @@ parse_file(St0) ->
     end.
 
 %% parse_head(File)
-%%  Parse the head of the file.
+%%  Parse the head of the file. Skip all comments and blank lines.
 
 parse_head(Ifile) -> parse_defs(Ifile, nextline(Ifile, 0)).
 
 %% parse_defs(File, Line)
-%%  Parse the macro definition section of a file. Allow no definitions.
+%%  Parse the macro definition section of a file. This must exist.
 
-parse_defs(Ifile, {ok,"Definitions." ++ _,L}) ->
+parse_defs(Ifile, {ok,?DEFS_HEAD ++ _,L}) ->
     parse_defs(Ifile, nextline(Ifile, L), []);
 parse_defs(_, {ok,_,L}) ->
     {error,{L,leex,missing_defs}};
@@ -208,7 +214,7 @@ parse_defs(Ifile, Line, Ms) ->
 %% parse_rules(File, Line, Macros)
 %%  Parse the RE rules section of the file. This must exist.
 
-parse_rules(Ifile, {ok,"Rules." ++ _Rest,L}, Ms) ->
+parse_rules(Ifile, {ok,?RULE_HEAD ++ _Rest,L}, Ms) ->
     parse_rules(Ifile, nextline(Ifile, L), Ms, [], [], 0);
 parse_rules(_, {ok,_,L}, _) ->
     {error,{L,leex,missing_rules}};
@@ -216,13 +222,12 @@ parse_rules(_, {eof,L}, _) ->
     {error,{L,leex,missing_rules}}.
 
 %% parse_rules(File, Result, Macros, RegExpActions, Actions, Acount) ->
-%%      {ok,RegExpActions,Actions} | {error,E}.
+%%      {ok,RegExpActions,Actions,Code} | {error,E}.
 
 parse_rules(Ifile, NextLine, Ms, REAs, As, N) ->
     case NextLine of
-	{ok,"Erlang code." ++ _Rest,L} ->
-	    %% Must be careful to put rules in correct order!
-	    parse_code(Ifile, L, reverse(REAs), reverse(As));
+	{ok,?CODE_HEAD ++ _Rest,_} ->
+	    parse_rules_end(Ifile, NextLine, REAs, As);
 	{ok,Chars,L0} ->
 	    %%io:fwrite("~w: ~p~n", [L0,Chars]),
 	    case collect_rule(Ifile, Chars, L0) of
@@ -236,9 +241,16 @@ parse_rules(Ifile, NextLine, Ms, REAs, As, N) ->
 		{error,E} -> {error,E}
 	    end;
 	{eof,_} ->
-	    %% Must be careful to put rules in correct order!
-	    {ok,reverse(REAs),reverse(As),[]}
+	    parse_rules_end(Ifile, NextLine, REAs, As)
     end.
+
+parse_rules_end(_, {ok,_,L}, [], []) ->
+    {error,{L,leex,empty_rules}};
+parse_rules_end(_, {eof,L}, [], []) ->
+    {error,{L,leex,empty_rules}};
+parse_rules_end(Ifile, NextLine, REAs, As) ->
+    %% Must be *VERY* careful to put rules in correct order!
+    parse_code(Ifile, NextLine, reverse(REAs), reverse(As)).
 
 %% collect_rule(File, Line, Lineno) ->
 %%      {ok,RegExp,ActionTokens,NewLineno} | {error,E}.
@@ -318,11 +330,19 @@ sub_repl([{St,L}|Ss], Rep, S, Pos) ->
     substr(S, Pos, St-Pos) ++ Rep ++ Rs;
 sub_repl([], _Rep, S, Pos) -> substr(S, Pos).
 
-%% parse_code(File, Line, REAs, Actions)
-%%  Parse the code section of the file.
+%% parse_code(File, Line, REAs, Actions) -> {ok,RegExpActions,Actions,Code}.
+%%  Parse the code section of the file. This must exist.
 
-parse_code(Ifile, _, REAs, As) ->
-    {ok,REAs,As,io:get_chars(Ifile, leex, 102400)}.
+parse_code(Ifile, {ok,?CODE_HEAD ++ _,_}, REAs, As) ->
+    %% Always return list of chars, even if at eof.
+    Code = case io:get_chars(Ifile, leex, 102400) of
+	       eof -> [];
+	       Chars -> Chars
+	   end,
+    {ok,REAs,As,Code};
+parse_code(_, {ok,_,L}, _, _) -> {error,{L,leex,missing_code}};
+parse_code(_, {eof,L}, _, _) -> {error,{L,leex,missing_code}}.
+
 
 %% nextline(InputFile, PrevLineNo) -> {ok,Chars,LineNo} | {eof,LineNo}.
 %%  Get the next line skipping comment lines and blank lines.
@@ -376,6 +396,8 @@ make_dfa(REAs, St) ->
 %%  rules so that the accepting have ascending states have ascending
 %%  state numbers.  Start numbering the states from 1 as we put the
 %%  states in a tuple with the state number as the index.
+%%
+%%  The edges from a state are a list of {CharRange,State} | {epsilon,State}.
 
 build_combined_nfa(REAs) ->
     {NFA0,Firsts,Free} = build_nfa_list(REAs, [], [], 1),
@@ -510,7 +532,7 @@ build_dfa(Set, Us, N, Ts, Ms, NFA) ->
     %% List of all transition sets.
     Crs0 = [Cr || S <- Set,
 		  {Crs,_St} <- (element(S, NFA))#nfa_state.edges,
-		  list(Crs),
+		  Crs /= epsilon,		%Not an epsilon transition
 		  Cr <- Crs ],
     Crs1 = lists:usort(Crs0),			%Must remove duplicates!
     %% Build list of disjoint test ranges.
@@ -589,13 +611,10 @@ eclosure([St|Sts], NFA, Ec) ->
 eclosure([], _, Ec) -> Ec.
 
 move(Sts, Cr, NFA) ->
+    %% io:fwrite("move1: ~p\n", [{Sts,Cr}]),
     [ St || N <- Sts,
 	    {Crs,St} <- (element(N, NFA))#nfa_state.edges,
-	    list(Crs),
-%% 	    begin
-%% 		io:fwrite("move1: ~p\n", [{Sts,Cr,Crs,in_crs(Cr,Crs)}]),
-%% 		true
-%% 	    end,
+	    Crs /= epsilon,			%Not an epsilon transition
 	    in_crs(Cr, Crs) ].
 
 in_crs({C1,C2}, [{C3,C4}|_Crs]) when C1 >= C3, C2 =< C4 -> true;
