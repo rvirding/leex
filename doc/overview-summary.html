@@ -8,7 +8,7 @@
 <div class="navbar"><a name="#navbar_top"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
 <h1>leex documentation</h1>
 <p>Copyright © 2008 Robert Virding</p>
-<p><b>Version:</b> 0.1
+<p><b>Version:</b> 0.3
 </p>
 <p><b>Authors:</b> Robert Virding (<a href="mailto:rvirding@gmail.com"><tt>rvirding@gmail.com</tt></a>).</p>
 
@@ -25,22 +25,34 @@ Erlang, similar to lex or flex.</p>
 
 	<h4><a name="DATATYPES">DATATYPES</a></h4>
 
-		<pre>     ScanRet = {ok,Tokens,EndLine} |
-			  {eof,EndLine} |
-			  {error,ErrorDescriptor,EndLine}
-		Cont = continuation()
-		ErrorDescriptor = {ErrorLine,Module,Error}</pre>
+		<p>ScanRet = {ok,Tokens,EndLine} |  			
+{eof,EndLine} |  			
+{error,ErrorDescriptor,EndLine}</p>
+
+		<p>Cont = continuation()</p>
+
+		<p>ErrorDescriptor = {ErrorLine,Module,Error}</p>
+
 		<h4><a name="EXPORTS">EXPORTS</a></h4>
 
-		<p>file(FileName) -&gt; ok | error
-		file(FileName, Options) -&gt; ok | error</p>
+		<p>file(FileName) -&gt; ok | error</p>
+
+		<p>file(FileName, Options) -&gt; ok | error</p>
 
 			<p>The current options are:</p>
+
+			<p>{includefile,File}				
+Use a specific or customised prologue file instead of				
+default leex/include/leexinc.hrl which is otherwise				
+included.</p>
 
 			<p>{outdir,Dir} - generate the scanner file in directory Dir			
 dfa_graph    - generate a .dot file which contains a       				
 desciption of the DFA in a format which can be       				
-viewd with Graphviz, www.graphviz.com</p>
+viewd with Graphviz, www.graphviz.com			
+verbose				
+Output information from parsing the input file and				
+generating the internal tables.</p>
 
 			<p>Generate a lexical analyzer from the definition in the input			
 file. The input file has the extension .xrl. This is added to			
@@ -49,15 +61,17 @@ Xrl filename without the .xrl extension.</p>
 
 		<h4><a name="GENERATED_SCANNER_EXPORTS">GENERATED SCANNER EXPORTS</a></h4>
 
-		<p>string(String) -&gt; ScanRet		
-string(String, StartLine) -&gt; ScanRet</p>
+		<p>string(String) -&gt; ScanRet</p>
+
+		<p>string(String, StartLine) -&gt; ScanRet</p>
 
 			<p>Scan String and return all the tokens in it, or an error.			
 N.B. it is an error if all of the characters in String are			
 consumed.</p>
 
-		<p>token(Cont, Chars) -&gt; {more,Cont} | {done,ScanRet,RestChars}		
-token(Cont, Chars, StartLine) -&gt; {more,Cont} | {done,ScanRet,RestChars}</p>
+		<p>token(Cont, Chars) -&gt; {more,Cont} | {done,ScanRet,RestChars}</p>
+
+		<p>token(Cont, Chars, StartLine) -&gt; {more,Cont} | {done,ScanRet,RestChars}</p>
 
 			<p>This is a re-entrant call to try and scan one token from			
 Chars. If there are enough characters in Chars to either scan			
@@ -74,8 +88,9 @@ an application by:</p>
 			<p>io:request(InFile, {get_until,Prompt,Module,token,[Line]})				
 -&gt; ScanRet</p>
 
-		<p>tokens(Cont, Chars) -&gt; {more,Cont} | {done,ScanRet,RestChars}		
-tokens(Cont, Chars, StartLine) -&gt; {more,Cont} | {done,ScanRet,RestChars}</p>
+		<p>tokens(Cont, Chars) -&gt; {more,Cont} | {done,ScanRet,RestChars}</p>
+
+		<p>tokens(Cont, Chars, StartLine) -&gt; {more,Cont} | {done,ScanRet,RestChars}</p>
 
 			<p>This is a re-entrant call to try and scan tokens from Chars.			
 If there are enough characters in Chars to either scan tokens			
@@ -169,16 +184,32 @@ skip_token        - skip this token completely
 {error,ErrString} - an error in the token, ErrString is a string    					
 describing the error</p>
 
+			<p>It is also possible to push back characters into the input			
+characters with the following returns:</p>
+
+			<p>{token,Token,PushBackList}			
+{end_token,Token,PushBackList}			
+{skip_token,PushBackList}</p>
+
+			<p>These have the same meanings as the normal returns but the			
+characters in PushBackList will be prepended to the input			
+characters and scanned for the next token. Note that pushing			
+back a newline will mean the line numbering will no longer be			
+correct. N.B. Pushing back characters gives you unexpected			
+possibilities to cause the scanner to loop!</p>
+
 			<p>The following example would match a simple Erlang integer or			
 float and return a token which could be sent to the Erlang			
 parser:</p>
+
 
 			<p>D = [0-9]</p>
 
 			<p>{D}+ :  {token,{integer,					
 TokenLine,					
-list_to_integer(TokenChars)}}.			
-{D}+\.{D}+((E|e)(\+|\-)?{D}+)? :				
+list_to_integer(TokenChars)}}.</p>
+
+			<p>{D}+\.{D}+((E|e)(\+|\-)?{D}+)? :				
 {token,{float,TokenLine,list_to_float(TokenChars)}}.</p>
 
 			<p>The Erlang code in the "Erlang Code." section is written into			
@@ -196,58 +227,80 @@ B. W. Kernighan, P. J. Weinberger. They are composed of the
 following characters:</p>
 
 			<p>c    			
-matches the non-metacharacter c.			
-\c    			
-matches the escape sequence or literal character c.			
-.    			
-matches any character.			
-^    			
-matches the beginning of a string.			
-$    			
-matches the end of a string.			
-[abc...]    			
+matches the non-metacharacter c.</p>
+
+			<p>\c    			
+matches the escape sequence or literal character c.</p>
+
+			<p>.    			
+matches any character.</p>
+
+			<p>^    			
+matches the beginning of a string.</p>
+
+			<p>$    			
+matches the end of a string.</p>
+
+			<p>[abc...]    			
 character class, which matches any of the characters    			
 abc... Character ranges are specified by a pair of    			
-characters separated by a -.			
-[^abc...]    			
+characters separated by a -.</p>
+
+			<p>[^abc...]    			
 negated character class, which matches any character    			
-except abc....			
-r1 | r2    			
-alternation. It matches either r1 or r2.			
-r1r2    			
-concatenation. It matches r1 and then r2.			
-r+    			
-matches one or more rs.			
-r*    			
-matches zero or more rs.			
-r?    			
-matches zero or one rs.			
-(r)    			
+except abc....</p>
+
+			<p>r1 | r2    			
+alternation. It matches either r1 or r2.</p>
+
+			<p>r1r2    			
+concatenation. It matches r1 and then r2.</p>
+
+			<p>r+    			
+matches one or more rs.</p>
+
+			<p>r*    			
+matches zero or more rs.</p>
+
+			<p>r?    			
+matches zero or one rs.</p>
+
+			<p>(r)    			
 grouping. It matches r.</p>
 
 			<p>The escape sequences allowed are the same as for Erlang strings:</p>
 
 			<p>\b    			
-backspace			
-\f    			
-form feed			
-\n    			
-newline (line feed)			
-\r    			
-carriage return			
-\t    			
-tab			
-\e    			
-escape			
-\v    			
-vertical tab			
-\s    			
-space			
-\d    			
-delete			
-\ddd    			
-the octal value ddd			
-\c    			
+backspace</p>
+
+			<p>\f    			
+form feed</p>
+
+			<p>\n    			
+newline (line feed)</p>
+
+			<p>\r    			
+carriage return</p>
+
+			<p>\t    			
+tab</p>
+
+			<p>\e    			
+escape</p>
+
+			<p>\v    			
+vertical tab</p>
+
+			<p>\s    			
+space</p>
+
+			<p>\d    			
+delete</p>
+
+			<p>\ddd    			
+the octal value ddd</p>
+
+			<p>\c    			
 any other character literally, for example \\ for    			
 backslash, \" for ")</p>
 
@@ -264,6 +317,6 @@ backslash, \" for ")</p>
 			a nasty error.
 <hr>
 <div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
-<p><i>Generated by EDoc, Aug 13 2008, 04:18:13.</i></p>
+<p><i>Generated by EDoc, Dec 29 2008, 02:29:17.</i></p>
 </body>
 </html>

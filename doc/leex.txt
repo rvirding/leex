@@ -39,6 +39,10 @@ file(FileName, Options) -> ok | error
 		the DFA in a format which can be viewd with Graphviz,
 		www.graphviz.com
 
+	verbose
+		Output information from parsing the input file and
+		generating the internal tables.
+
 	Generate a lexical analyzer from the definition in the input
 	file. The input file has the extension .xrl. This is added to
 	the filename if it is not given. The resulting module is the

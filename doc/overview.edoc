@@ -1,7 +1,7 @@
 @title leex documentation
 @author Robert Virding <rvirding@gmail.com>
 @copyright 2008 Robert Virding
-@version 0.1
+@version 0.3
 
 @doc
 
@@ -20,20 +20,31 @@
 		ScanRet = {ok,Tokens,EndLine} |
 			  {eof,EndLine} |
 			  {error,ErrorDescriptor,EndLine}
+
 		Cont = continuation()
+
 		ErrorDescriptor = {ErrorLine,Module,Error}
 
 		=== EXPORTS ===
 
 		file(FileName) -&gt; ok | error
+
 		file(FileName, Options) -&gt; ok | error
 
 			The current options are:
+
+			{includefile,File}
+				Use a specific or customised prologue file instead of
+				default leex/include/leexinc.hrl which is otherwise
+				included.
 
 			{outdir,Dir} - generate the scanner file in directory Dir
 			dfa_graph    - generate a .dot file which contains a
 				       desciption of the DFA in a format which can be
 				       viewd with Graphviz, www.graphviz.com
+			verbose
+				Output information from parsing the input file and
+				generating the internal tables.
 
 			Generate a lexical analyzer from the definition in the input
 			file. The input file has the extension .xrl. This is added to
@@ -43,6 +54,7 @@
 		=== GENERATED SCANNER EXPORTS ===
 
 		string(String) -> ScanRet
+
 		string(String, StartLine) -> ScanRet
 
 			Scan String and return all the tokens in it, or an error.
@@ -50,6 +62,7 @@
 			consumed.
 
 		token(Cont, Chars) -> {more,Cont} | {done,ScanRet,RestChars}
+
 		token(Cont, Chars, StartLine) -> {more,Cont} | {done,ScanRet,RestChars}
 
 			This is a re-entrant call to try and scan one token from
@@ -68,6 +81,7 @@
 				-> ScanRet
 
 		tokens(Cont, Chars) -> {more,Cont} | {done,ScanRet,RestChars}
+
 		tokens(Cont, Chars, StartLine) -> {more,Cont} | {done,ScanRet,RestChars}
 
 			This is a re-entrant call to try and scan tokens from Chars.
@@ -162,15 +176,31 @@
 			{error,ErrString} - an error in the token, ErrString is a string
 					    describing the error
 
+			It is also possible to push back characters into the input
+			characters with the following returns:
+
+			{token,Token,PushBackList}
+			{end_token,Token,PushBackList}
+			{skip_token,PushBackList}
+
+			These have the same meanings as the normal returns but the
+			characters in PushBackList will be prepended to the input
+			characters and scanned for the next token. Note that pushing
+			back a newline will mean the line numbering will no longer be
+			correct. N.B. Pushing back characters gives you unexpected
+			possibilities to cause the scanner to loop!
+
 			The following example would match a simple Erlang integer or
 			float and return a token which could be sent to the Erlang
 			parser:
+
 
 			D = [0-9]
 
 			{D}+ :  {token,{integer,
 					TokenLine,
 					list_to_integer(TokenChars)}}.
+
 			{D}+\.{D}+((E|e)(\+|\-)?{D}+)? :
 				{token,{float,TokenLine,list_to_float(TokenChars)}}.
 
@@ -190,31 +220,43 @@
 
 			c
 			    matches the non-metacharacter c.
+
 			\c
 			    matches the escape sequence or literal character c.
+
 			.
 			    matches any character.
+
 			^
 			    matches the beginning of a string.
+
 			$
 			    matches the end of a string.
+
 			[abc...]
 			    character class, which matches any of the characters
 			    abc... Character ranges are specified by a pair of
 			    characters separated by a -.
+
 			[^abc...]
 			    negated character class, which matches any character
 			    except abc....
+
 			r1 | r2
 			    alternation. It matches either r1 or r2.
+
 			r1r2
 			    concatenation. It matches r1 and then r2.
+
 			r+
 			    matches one or more rs.
+
 			r*
 			    matches zero or more rs.
+
 			r?
 			    matches zero or one rs.
+
 			(r)
 			    grouping. It matches r.
 
@@ -222,24 +264,34 @@
 
 			\b
 			    backspace
+
 			\f
 			    form feed
+
 			\n
 			    newline (line feed)
+
 			\r
 			    carriage return
+
 			\t
 			    tab
+
 			\e
 			    escape
+
 			\v
 			    vertical tab
+
 			\s
 			    space
+
 			\d
 			    delete
+
 			\ddd
 			    the octal value ddd
+
 			\c
 			    any other character literally, for example \\ for
 			    backslash, \" for ")

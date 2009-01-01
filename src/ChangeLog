@@ -1,3 +1,15 @@
+2008-12-29  Robert Virding  <rv@arthur>
+
+	* All files: Released Leex 0.3 to Git.
+	
+2008-12-29  Robert Virding  <rv@arthur>
+
+	* leex.erl (build_dfa, move): Clearer that we ignore epsilon
+	transitions.
+	(parse_rules_end): Check for, and flag, no rules.
+	(parse_code): Correctly handle completely empty code section.
+	(parse_code): Enforce having Erlang code heading.
+
 2008-12-21  Robert Virding  <rv@arthur>
 
 	* leex.erl: Added verbose flag to control printing status.

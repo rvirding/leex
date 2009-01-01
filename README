@@ -5,6 +5,20 @@ analyzed and processed by yecc. It is NOT a part of OTP at this point.
 If you are looking at a good article on how to use leex and yecc please visit: 
 http://hopper.squarespace.com/blog/2008/5/29/leex-and-yecc.html
 
+v0.3
+----
+Added options to pushback characters into the input stream.
+
+Can now handle full unicode character sets in both input file and
+generated scanner. Of course i/o system can't generate such an input
+file yet.
+
+Enforce headings for all sections of .xrl file.
+
+Added verbose flag to control printing of parsing information.
+
+Fixed bug with completely empty erlang code section.
+
 v0.2
 ----
 Added includefile option. Search for include file in current directory
