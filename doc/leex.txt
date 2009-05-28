@@ -55,7 +55,7 @@ string(String, StartLine) -> ScanRet
 
 	Scan String and return all the tokens in it, or an error.
 	N.B. it is an error if all of the characters in String are
-	consumed.
+	not consumed.
 
 token(Cont, Chars) -> {more,Cont} | {done,ScanRet,RestChars}
 token(Cont, Chars, StartLine) -> {more,Cont} | {done,ScanRet,RestChars}
