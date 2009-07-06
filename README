@@ -9,6 +9,12 @@ here.
 If you are looking at a good article on how to use leex and yecc try:
 http://hopper.squarespace.com/blog/2008/5/29/leex-and-yecc.html
 
+v0.5
+----
+Use the distribution code.
+
+Define LEEXLIB can be used to set where to find include file.
+
 v0.4
 ----
 This is the last version of leex which is NOT part of the distribution!

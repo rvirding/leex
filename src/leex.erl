@@ -41,9 +41,11 @@
 -import(ordsets, [is_element/2,add_element/2,union/2]).
 -import(orddict, [store/3]).
 
--include("erl_compile.hrl").
+-include_lib("stdlib/include/erl_compile.hrl").
 
 -define(LEEXINC, "leexinc.hrl").        % Include file
+-define(LEEXLIB, parsetools).			%Leex is in lib parsetools
+%%-define(LEEXLIB, leex).				%Leex is in lib leex
 
 -define(DEFS_HEAD, "Definitions.").
 -define(RULE_HEAD, "Rules.").
@@ -955,7 +957,7 @@ open_inc_file(State) ->
     end.
 
 inc_file_name([]) ->
-    Incdir = filename:join(code:lib_dir(parsetools), "include"),
+    Incdir = filename:join(code:lib_dir(?LEEXLIB), "include"),
     filename:join(Incdir, ?LEEXINC);
 inc_file_name(Filename) ->
     Filename.
