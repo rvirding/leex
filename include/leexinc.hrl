@@ -109,7 +109,7 @@ token(S0, Ics0, L0, Tcs, Tlen0, Tline, A0, Alen0) ->
 	    token_cont(yysuf(Tcs, Alen1), L1, yyaction(A1, Alen1, Tcs, Tline))
     end.
 
-%% tokens_cont(RestChars, Line, Token)
+%% token_cont(RestChars, Line, Token)
 %%  If we have a token or error then return done, else if we have a
 %%  skip_token then continue.
 
