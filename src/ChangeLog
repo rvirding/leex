@@ -1,7 +1,15 @@
+2009-07-01  Robert Virding  <rv@arthur>
+
+	* All files: Released Leex 0.4 to Git.
+
+2009-03-29  Robert Virding  <rv@arthur>
+
+	* leexinc.hrl (token): Fixed bug in token continuation order.
+
 2008-12-29  Robert Virding  <rv@arthur>
 
 	* All files: Released Leex 0.3 to Git.
-	
+
 2008-12-29  Robert Virding  <rv@arthur>
 
 	* leex.erl (build_dfa, move): Clearer that we ignore epsilon
