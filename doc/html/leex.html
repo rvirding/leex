@@ -1,0 +1,825 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<!-- This document was generated using DocBuilder-0.9.8.5 -->
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <title>leex</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"/>
+  <script type="text/javascript" src="../../../../doc/erlresolvelinks.js"></script>
+  <style type="text/css">
+<!--
+    body          { font-family: Verdana, Arial, Helvetica, sans-serif }
+    span.bold_code        { font-family: courier;font-weight: bold}
+    span.code        { font-family: courier;font-weight: normal}
+
+.note, .warning {
+  border: solid black 1px;
+  margin: 1em 3em;
+}
+
+.note .label {
+  background: #30d42a;
+  color: white;
+  font-weight: bold;
+  padding: 5px 10px;
+}
+.note .content {
+  background: #eafeea;
+  color: black;
+  line-height: 120%;
+  font-size: 90%;
+  padding: 5px 10px;
+}
+.warning .label {
+  background: #C00;
+  color: white;
+  font-weight: bold;
+  padding: 5px 10px;
+}
+.warning .content {
+  background: #FFF0F0;
+  color: black;
+  line-height: 120%;
+  font-size: 90%;
+  padding: 5px 10px;
+}
+
+    .example     { background-color:#eeeeff } 
+    pre          { font-family: courier; font-weight: normal }
+    .REFBODY     { margin-left: 13mm }
+    .REFTYPES    { margin-left: 8mm }
+-->
+  </style>
+</head>
+<body bgcolor="#FFFFFF" text="#000000" link="#0000FF" vlink="#FF00FF" alink="#FF0000">
+<!-- refpage -->
+<center>
+<a href="http://www.ericsson.com/technology/opensource/erlang"><img border="0" alt="[Ericsson AB]" src="min_head.gif"/></a>
+</center><center>
+<h1>leex</h1>
+</center>
+<h3>MODULE</h3>
+<div class="REFBODY">
+leex
+</div>
+
+<h3>MODULE SUMMARY</h3>
+<div class="REFBODY">
+Lexical analyzer generator for Erlang
+</div>
+
+<h3>DESCRIPTION</h3>
+<div class="REFBODY">
+
+<p>A regular expression based lexical analyzer generator for
+Erlang, similar to lex or flex.
+</p>
+</div>
+
+<h3>DATA TYPES</h3>
+<div class="REFBODY">
+
+<div class="example"><pre>
+ScanRet = {ok,Tokens,EndLine} |
+   {eof,EndLine} |
+   {error,ErrorDescriptor,EndLine}
+Cont = continuation()
+ErrorDescriptor = {ErrorLine,Module,Error}
+</pre></div>
+
+</div>
+
+<h3>EXPORTS</h3>
+
+<p><a name="file-1"><span class="bold_code">file(FileName) -&#62; ok | error</span></a><br/>
+<a name="file-2"><span class="bold_code">file(FileName, Options) -&#62; ok | error</span></a><br/>
+
+</p>
+
+<div class="REFBODY">
+
+<p>Generates a lexical analyzer from the definition in the input
+file. The input file has the extension <span class="code">.xrl</span>. This is
+added to the filename if it is not given. The resulting module
+is the Xrl filename without the <span class="code">.xrl</span> extension.
+</p>
+<p>The current options are:
+</p>
+<dl>
+
+<dt>
+<span class="code">dfa_graph</span>
+</dt>
+
+<dd>
+Generates a <span class="code">.dot</span> file which contains a
+description of the DFA in a format which can be viewed with
+Graphviz, <span class="code">www.graphviz.com</span>.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">{includefile,File}</span>
+</dt>
+
+<dd>
+Uses a specific or customised prologue file
+instead of default
+<span class="code">lib/parsetools/include/leexinc.hrl</span> which is
+otherwise included.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">{report_errors, bool()}</span>
+</dt>
+
+<dd>
+Causes errors to be printed as they occur. Default is
+<span class="code">true</span>.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">{report_warnings, bool()}</span>
+</dt>
+
+<dd>
+Causes warnings to be printed as they occur. Default is
+<span class="code">true</span>.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">{report, bool()}</span>
+</dt>
+
+<dd>
+This is a short form for both <span class="code">report_errors</span> and
+<span class="code">report_warnings</span>.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">{return_errors, bool()}</span>
+</dt>
+
+<dd>
+If this flag is set, <span class="code">{error, Errors, Warnings}</span>
+is returned when there are errors. Default is <span class="code">false</span>.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">{return_warnings, bool()}</span>
+</dt>
+
+<dd>
+If this flag is set, an extra field containing
+<span class="code">Warnings</span> is added to the tuple returned upon
+success. Default is <span class="code">false</span>.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">{return, bool()}</span>
+</dt>
+
+<dd>
+This is a short form for both <span class="code">return_errors</span> and
+<span class="code">return_warnings</span>.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">{scannerfile, ScannerFile}</span>
+</dt>
+
+<dd>
+<span class="code">ScannerFile</span> is the name of the file that
+will contain the Erlang scanner code that is generated.
+The default (<span class="code">&#34;&#34;</span>) is to add the extension
+<span class="code">.erl</span> to <span class="code">FileName</span> stripped of the
+<span class="code">.xrl</span> extension.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">{verbose, bool()}</span>
+</dt>
+
+<dd>
+Outputs information from parsing the input file and
+generating the internal tables.<br />
+
+
+</dd>
+
+</dl>
+
+<p>Any of the Boolean options can be set to <span class="code">true</span> by 
+stating the name of the option. For example, <span class="code">verbose</span>
+is equivalent to <span class="code">{verbose, true}</span>.
+
+</p>
+</div>
+
+<p><a name="format_error-1"><span class="bold_code">format_error(ErrorDescriptor) -&#62; Chars</span></a><br/>
+
+</p>
+
+<div class="REFBODY"><p>Types:</p>
+  <div class="REFTYPES">
+<p>
+<span class="bold_code">ErrorDescriptor = errordesc()</span><br/>
+<span class="bold_code">Chars = [char() | Chars]</span><br/>
+
+ </p> </div>
+</div>
+
+<div class="REFBODY">
+
+<p>Returns a string which describes the error ErrorDescriptor
+returned when there is an error in a regular expression.
+</p>
+</div>
+
+<h3>GENERATED SCANNER EXPORTS</h3>
+<div class="REFBODY">
+
+<p>The following functions are exported by the generated scanner.
+</p>
+</div>
+
+<h3>EXPORTS</h3>
+
+<p><a name="string-1"><span class="bold_code">string(String) -&#62; ScanRet</span></a><br/>
+<a name="string-2"><span class="bold_code">string(String, StartLine) -&#62; ScanRet</span></a><br/>
+
+</p>
+
+<div class="REFBODY">
+
+<p>Scans <span class="code">String</span> and returns all the tokens in it, or an
+error. N.B. it is an error if all of the characters in
+<span class="code">String</span> are consumed.
+</p>
+</div>
+
+<p><a name="token-2"><span class="bold_code">token(Cont, Chars) -&#62; {more,Cont} | {done,ScanRet,RestChars}
+</span></a><br/>
+<a name="token-3"><span class="bold_code">token(Cont, Chars, StartLine) -&#62; {more,Cont} 
+| {done,ScanRet,RestChars}
+</span></a><br/>
+
+</p>
+
+<div class="REFBODY">
+
+<p>This is a re-entrant call to try and scan one token from
+<span class="code">Chars</span>. If there are enough characters in <span class="code">Chars</span>
+to either scan a token or detect an error then this will be
+returned with <span class="code">{done,...}</span>. Otherwise
+<span class="code">{cont,Cont}</span> will be returned where <span class="code">Cont</span> is
+used in the next call to token with more characters to try
+an scan the token. This is continued until a token has been
+scanned. <span class="code">Cont</span> is initially <span class="code">[]</span>.
+</p>
+<p>It is not designed to be called directly by an application
+but used through the i/o system where it can typically
+called in an application by:
+</p>
+<div class="example"><pre>
+io:request(InFile, {get_until,Prompt,Module,token,[Line]})
+  -&#62; ScanRet
+</pre></div>
+
+</div>
+
+<p><a name="tokens-2"><span class="bold_code">tokens(Cont, Chars) -&#62; {more,Cont} | {done,ScanRet,RestChars}
+</span></a><br/>
+<a name="tokens-3"><span class="bold_code">tokens(Cont, Chars, StartLine) -&#62; 
+{more,Cont} | {done,ScanRet,RestChars}
+</span></a><br/>
+
+</p>
+
+<div class="REFBODY">
+
+<p>This is a re-entrant call to try and scan tokens from
+<span class="code">Chars</span>. If there are enough characters in <span class="code">Chars</span>
+to either scan tokens or detect an error then this will be
+returned with <span class="code">{done,...}</span>. Otherwise
+<span class="code">{cont,Cont}</span> will be returned where <span class="code">Cont</span> is
+used in the next call to tokens with more characters to try
+an scan the tokens. This is continued until all tokens have
+been scanned. <span class="code">Cont</span> is initially <span class="code">[]</span>.
+</p>
+<p>This functions differs from <span class="code">token</span> in that it will
+continue to scan tokens upto and including an
+<span class="code">{end_token,Token}</span> has been scanned (see next
+section). It will then return all the tokens. This is
+typically used for scanning grammars like Erlang where there
+is an explicit end token, <span class="code">'.'</span>. If no end token is
+found then the whole file will be scanned and returned. If
+an error occurs then all tokens upto and including the next
+end token will be skipped.
+</p>
+<p>It is not designed to be called directly by an application
+but used through the i/o system where it can typically
+called in an application by:
+</p>
+<div class="example"><pre>
+io:request(InFile, {get_until,Prompt,Module,tokens,[Line]})
+  -&#62; ScanRet
+</pre></div>
+
+</div>
+
+<h3>Input File Format</h3>
+<div class="REFBODY">
+
+<p>Erlang style comments starting with a '%' are allowed in
+scanner files. A definition file has the following format:
+</p>
+<div class="example"><pre>
+&#60;Header&#62;
+
+Definitions.
+
+&#60;Macro Definitions&#62;
+
+Rules.
+
+&#60;Token Rules&#62;
+
+Erlang Code.
+
+&#60;Erlang Code&#62;
+</pre></div>
+
+<p>The &#34;Definitions.&#34;, &#34;Rules.&#34; and &#34;Erlang Code.&#34; headings are
+mandatory and must occur at the beginning of a source line. The
+&#60;Header&#62;, &#60;Macro Definitions&#62; and &#60;Erlang Code&#62;
+sections may be empty but there must be at least one rule.
+</p>
+<p>Macro definitions have the following format:
+</p>
+<div class="example"><pre>
+NAME = VALUE
+</pre></div>
+
+<p>and there must be spaces around '='. Macros can be used in the
+regular expressions of rules by writing {NAME}. N.B. when macros
+are expanded in expressions the macro calls are replaced by the
+macro value without any form of quoting or enclosing in
+parentheses.
+</p>
+<p>Rules have the following format:
+</p>
+<div class="example"><pre>
+&#60;Regexp&#62; : &#60;Erlang code&#62;.
+</pre></div>
+
+<p>The &#60;Regexp&#62; must occur at the start of a line and not include
+any blanks, use \t and \s to include TAB and SPACE characters in
+the regular expression. If &#60;Regexp&#62; matches then the
+corresponding &#60;Erlang code&#62; is evaluated to generate a token.
+With the Erlang code the following predefined variables are
+available:
+</p>
+<dl>
+
+<dt>
+<span class="code">TokenChars</span>
+</dt>
+
+<dd>
+A list of the characters in the matched token.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">TokenLen</span>
+</dt>
+
+<dd>
+The number of characters in the matched token.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">TokenLine</span>
+</dt>
+
+<dd>
+The line number where the token occurred.<br />
+
+
+</dd>
+
+</dl>
+
+<p>The code must return:
+</p>
+<dl>
+
+<dt>
+<span class="code">{token,Token}</span>
+</dt>
+
+<dd>
+Return <span class="code">Token</span> to the caller.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">{end_token,Token}</span>
+</dt>
+
+<dd>
+Return <span class="code">Token</span> and is last token in a tokens call.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">skip_token</span>
+</dt>
+
+<dd>
+Skip this token completely.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">{error,ErrString}</span>
+</dt>
+
+<dd>
+An error in the token, <span class="code">Errstring</span> is a string
+describing the error.<br />
+
+
+</dd>
+
+</dl>
+
+<p>It is also possible to push back characters into the input
+characters with the following returns:
+</p>
+<ul>
+
+<li>
+<span class="code">{token,Token,PushBackList}</span>
+</li>
+
+
+<li>
+<span class="code">{end_token,Token,PushBackList}</span>
+</li>
+
+
+<li>
+<span class="code">{skip_token,PushBackList}</span>
+</li>
+
+
+</ul>
+
+<p>These have the same meanings as the normal returns but the
+characters in PushBackList will be prepended to the input
+characters and scanned for the next token. Note that pushing
+back a newline will mean the line numbering will no longer be
+correct. N.B. Pushing back characters gives you unexpected
+possibilities to cause the scanner to loop!
+</p>
+<p>The following example would match a simple Erlang integer or
+float and return a token which could be sent to the Erlang
+parser:
+</p>
+<div class="example"><pre>
+D = [0-9]
+
+{D}+ :
+  {token,{integer,TokenLine,list_to_integer(TokenChars)}}.
+
+{D}+\.{D}+((E|e)(\+|\-)?{D}+)? :
+  {token,{float,TokenLine,list_to_float(TokenChars)}}.
+</pre></div>
+
+<p>The Erlang code in the &#34;Erlang Code.&#34; section is written into
+the output file directly after the module declaration and
+predefined exports declaration so it is possible to add extra
+exports, define imports and other attributes which are then
+visible in the whole file.
+</p>
+</div>
+
+<h3>Regular Expressions</h3>
+<div class="REFBODY">
+
+<p>The regular expressions allowed here is a subset of the set
+found in <span class="code">egrep</span> and in the AWK programming language, as
+defined in the book, The AWK Programming Language, by A. V. Aho,
+B. W. Kernighan, P. J. Weinberger. They are composed of the
+following characters:
+</p>
+<dl>
+
+<dt>
+<span class="code">c</span>
+</dt>
+
+<dd>
+Matches the non-metacharacter c.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">\c</span>
+</dt>
+
+<dd>
+Matches the escape sequence or literal character c.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">.</span>
+</dt>
+
+<dd>
+Matches any character.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">^</span>
+</dt>
+
+<dd>
+Matches the beginning of a string.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">$</span>
+</dt>
+
+<dd>
+Matches the end of a string.<br />
+
+</dd>
+
+<dt>
+<span class="code">[abc...]</span>
+</dt>
+
+<dd>
+Character class, which matches any of the characters
+<span class="code">abc...</span>. Character ranges are specified by a pair of
+characters separated by a <span class="code">-</span>.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">[^abc...]</span>
+</dt>
+
+<dd>
+Negated character class, which matches any character
+except <span class="code">abc...</span>.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">r1 | r2</span>
+</dt>
+
+<dd>
+Alternation. It matches either <span class="code">r1</span> or <span class="code">r2</span>.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">r1r2</span>
+</dt>
+
+<dd>
+Concatenation. It matches <span class="code">r1</span> and then <span class="code">r2</span>.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">r+</span>
+</dt>
+
+<dd>
+Matches one or more <span class="code">rs</span>.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">r*</span>
+</dt>
+
+<dd>
+Matches zero or more <span class="code">rs</span>.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">r?</span>
+</dt>
+
+<dd>
+Matches zero or one <span class="code">rs</span>.<br />
+
+
+</dd>
+
+<dt>
+<span class="code">(r)</span>
+</dt>
+
+<dd>
+Grouping. It matches <span class="code">r</span>.<br />
+
+
+</dd>
+
+</dl>
+
+<p>The escape sequences allowed are the same as for Erlang strings:
+</p>
+<dl>
+
+<dt>
+<span class="code">\b</span>
+</dt>
+
+<dd>
+Backspace.<br />
+
+</dd>
+
+<dt>
+<span class="code">\f</span>
+</dt>
+
+<dd>
+Form feed.<br />
+
+</dd>
+
+<dt>
+<span class="code">
+</span>
+</dt>
+
+<dd>
+Newline (line feed).<br />
+
+</dd>
+
+<dt>
+<span class="code">\r</span>
+</dt>
+
+<dd>
+Carriage return.<br />
+
+</dd>
+
+<dt>
+<span class="code">\t</span>
+</dt>
+
+<dd>
+Tab.<br />
+
+</dd>
+
+<dt>
+<span class="code">\e</span>
+</dt>
+
+<dd>
+Escape.<br />
+
+</dd>
+
+<dt>
+<span class="code">\v</span>
+</dt>
+
+<dd>
+Vertical tab.<br />
+
+</dd>
+
+<dt>
+<span class="code">\s</span>
+</dt>
+
+<dd>
+Space.<br />
+
+</dd>
+
+<dt>
+<span class="code">\d</span>
+</dt>
+
+<dd>
+Delete.<br />
+
+</dd>
+
+<dt>
+<span class="code">\ddd</span>
+</dt>
+
+<dd>
+The octal value <span class="code">ddd</span>.<br />
+
+</dd>
+
+<dt>
+<span class="code">\xhh</span>
+</dt>
+
+<dd>
+The hexadecimal value <span class="code">hh</span>.<br />
+
+</dd>
+
+<dt>
+<span class="code">\x{h...}</span>
+</dt>
+
+<dd>
+The hexadecimal value <span class="code">h...</span>.<br />
+
+</dd>
+
+<dt>
+<span class="code">\c</span>
+</dt>
+
+<dd>
+Any other character literally, for example <span class="code">\</span> for
+backslash, <span class="code">\&#34;</span> for <span class="code">&#34;</span>.<br />
+
+
+</dd>
+
+</dl>
+
+<p>The following examples define Erlang data types:
+</p>
+<div class="example"><pre>
+Atoms [a-z][0-9a-zA-Z_]*
+
+Variables [A-Z_][0-9a-zA-Z_]*
+
+Floats (\+|-)?[0-9]+\.[0-9]+((E|e)(\+|-)?[0-9]+)?
+</pre></div>
+
+<p>N.B. Anchoring a regular expression with ^ and $ is not
+implemented in the current version of leex and just generates a
+nasty error.
+</p>
+</div>
+<center>
+<hr/>
+<small>parsetools 1.4.7<br/>
+  Copyright &copy; 1991-2009
+  <a href="http://www.ericsson.com/technology/opensource/erlang">Ericsson AB</a><br/>
+</small>
+</center></body>
+</html>
