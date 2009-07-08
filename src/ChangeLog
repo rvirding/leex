@@ -1,3 +1,7 @@
+2009-07-08  Robert Virding  <rv@stanislaw.local>
+
+	* leex.erl: State always last argument, and last return value!
+
 2009-07-07  Robert Virding  <rv@stanislaw.local>
 
 	* leex.erl: To allow working on leex define LEEXLIB to set which

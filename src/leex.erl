@@ -352,7 +352,7 @@ parse_file(St0) ->
         {ok,Xfile} ->
             try
                 verbose_print(St0, "Parsing file ~s, ", [St0#leex.xfile]),
-                {ok,REAs,Actions,Code,St1} = parse_head(St0, Xfile),
+                {ok,REAs,Actions,Code,St1} = parse_head(Xfile, St0),
                 verbose_print(St1, "contained ~w rules.~n", [length(REAs)]),
                 {ok,REAs,Actions,Code,St1}
             after file:close(Xfile)
@@ -361,70 +361,70 @@ parse_file(St0) ->
             add_error({none,leex,{file_error,Error}}, St0)
     end.
 
-%% parse_head(State, File)
+%% parse_head(File, State) -> {ok,REAs,Actions,Code,State}.
 %%  Parse the head of the file. Skip all comments and blank lines.
 
-parse_head(St, Ifile) -> parse_defs(St, Ifile, nextline(Ifile, 0)).
+parse_head(Ifile, St) -> parse_defs(Ifile, nextline(Ifile, 0), St).
 
-%% parse_defs(State, File, Line)
+%% parse_defs(File, Line, State)
 %%  Parse the macro definition section of a file. This must exist.
 
-parse_defs(St, Ifile, {ok,?DEFS_HEAD ++ Rest,L}) ->
-    St1 = warn_ignored_chars(St, L, Rest),
-    parse_defs(St1, Ifile, nextline(Ifile, L), []);
-parse_defs(St, _, {ok,_,L}) ->
+parse_defs(Ifile, {ok,?DEFS_HEAD ++ Rest,L}, St) ->
+    St1 = warn_ignored_chars(L, Rest, St),
+    parse_defs(Ifile, nextline(Ifile, L), [], St1);
+parse_defs(_, {ok,_,L}, St) ->
     add_error({L,leex,missing_defs}, St);
-parse_defs(St, _, {eof,L}) ->
+parse_defs(_, {eof,L}, St) ->
     add_error({L,leex,missing_defs}, St).
 
-parse_defs(St, Ifile, {ok,Chars,L}, Ms) ->
+parse_defs(Ifile, {ok,Chars,L}, Ms, St) ->
     case tokens(Chars, " \t\n") of      % Also strips \n from eol!
         [Name,"=",Def] ->
-            parse_defs(St, Ifile, nextline(Ifile, L), [{Name,Def}|Ms]);
+            parse_defs(Ifile, nextline(Ifile, L), [{Name,Def}|Ms], St);
         _ ->                            % Anything else
-            parse_rules(St, Ifile, {ok,Chars,L}, Ms)
+            parse_rules(Ifile, {ok,Chars,L}, Ms, St)
     end;
-parse_defs(St, Ifile, Line, Ms) ->
-    parse_rules(St, Ifile, Line, Ms).
+parse_defs(Ifile, Line, Ms, St) ->
+    parse_rules(Ifile, Line, Ms, St).
 
-%% parse_rules(State, File, Line, Macros)
+%% parse_rules(File, Line, Macros, State)
 %%  Parse the RE rules section of the file. This must exist.
 
-parse_rules(St, Ifile, {ok,?RULE_HEAD ++ Rest,L}, Ms) ->
-    St1 = warn_ignored_chars(St, L, Rest),
-    parse_rules(St1, Ifile, nextline(Ifile, L), Ms, [], [], 0);
-parse_rules(St, _, {ok,_,L}, _) ->
+parse_rules(Ifile, {ok,?RULE_HEAD ++ Rest,L}, Ms, St) ->
+    St1 = warn_ignored_chars(L, Rest, St),
+    parse_rules(Ifile, nextline(Ifile, L), Ms, [], [], 0, St1);
+parse_rules(_, {ok,_,L}, _, St) ->
     add_error({L,leex,missing_rules}, St);
-parse_rules(St, _, {eof,L}, _) ->
+parse_rules(_, {eof,L}, _, St) ->
     add_error({L,leex,missing_rules}, St).
 
-%% parse_rules(State, File, Result, Macros, RegExpActions, Actions, Acount) ->
+%% parse_rules(File, Result, Macros, RegExpActions, Actions, Acount, State) ->
 %%      {ok,RegExpActions,Actions,Code,NewState} | throw(NewState)
 
-parse_rules(St, Ifile, NextLine, Ms, REAs, As, N) ->
+parse_rules(Ifile, NextLine, Ms, REAs, As, N, St) ->
     case NextLine of
         {ok,?CODE_HEAD ++ _Rest,_} ->
-            parse_rules_end(St, Ifile, NextLine, REAs, As);
+            parse_rules_end(Ifile, NextLine, REAs, As, St);
         {ok,Chars,L0} ->
             %%io:fwrite("~w: ~p~n", [L0,Chars]),
             case collect_rule(Ifile, Chars, L0) of
                 {ok,Re,Atoks,L1} ->
-                    {ok,REA,A,St1} = parse_rule(St, Re, L0, Atoks, Ms, N),
-                    parse_rules(St1, Ifile, nextline(Ifile, L1), Ms,
-                                [REA|REAs], [A|As], N+1);
+                    {ok,REA,A,St1} = parse_rule(Re, L0, Atoks, Ms, N, St),
+                    parse_rules(Ifile, nextline(Ifile, L1), Ms,
+                                [REA|REAs], [A|As], N+1, St1);
                 {error,E} -> add_error(E, St)
             end;
         {eof,_} ->
-            parse_rules_end(St, Ifile, NextLine, REAs, As)
+            parse_rules_end(Ifile, NextLine, REAs, As, St)
     end.
 
-parse_rules_end(St, _, {ok,_,L}, [], []) ->
+parse_rules_end(_, {ok,_,L}, [], [], St) ->
     add_error({L,leex,empty_rules}, St);
-parse_rules_end(St, _, {eof,L}, [], []) ->
+parse_rules_end(_, {eof,L}, [], [], St) ->
     add_error({L,leex,empty_rules}, St);
-parse_rules_end(St, Ifile, NextLine, REAs, As) ->
+parse_rules_end(Ifile, NextLine, REAs, As, St) ->
     %% Must be *VERY* careful to put rules in correct order!
-    parse_code(St, Ifile, NextLine, reverse(REAs), reverse(As)).
+    parse_code(Ifile, NextLine, reverse(REAs), reverse(As), St).
 
 %% collect_rule(File, Line, Lineno) ->
 %%      {ok,RegExp,ActionTokens,NewLineno} | {error,E}.
@@ -450,21 +450,21 @@ collect_action(Ifile, Chars, L0, Cont0) ->
             collect_action(Ifile, io:get_line(Ifile, leex), L0+1, Cont1)
     end.
 
-%% parse_rule(State, RegExpString, RegExpLine, ActionTokens, Macros, Counter)
+%% parse_rule(RegExpString, RegExpLine, ActionTokens, Macros, Counter, State)
 %%  Parse one regexp after performing macro substition.
 
-parse_rule(St, S, Line, [{dot,_}], Ms, N) ->
+parse_rule(S, Line, [{dot,_}], Ms, N, St) ->
     case parse_rule_regexp(S, Ms) of
         {ok,R} ->
-            ok = anchors_not_yet_implemented(St, R, Line),
+            ok = anchors_not_yet_implemented(R, Line, St),
             {ok,{R,N},{N,empty_action},St};
         {error,E} ->
             add_error({Line,leex,{regexp,E}}, St)
     end;
-parse_rule(St, S, Line, Atoks, Ms, N) ->
+parse_rule(S, Line, Atoks, Ms, N, St) ->
     case parse_rule_regexp(S, Ms) of
         {ok,R} ->
-            ok = anchors_not_yet_implemented(St, R, Line),
+            ok = anchors_not_yet_implemented(R, Line, St),
             case erl_parse:parse_exprs(Atoks) of
                 {ok,_Aes} ->
                     %% Check for token variables.
@@ -479,7 +479,7 @@ parse_rule(St, S, Line, Atoks, Ms, N) ->
             add_error({Line,leex,{regexp,E}}, St)
     end.
 
-anchors_not_yet_implemented(St, R, L) ->
+anchors_not_yet_implemented(R, L, St) ->
     case catch build_nfa(R, 1, 0) of
         {'EXIT', _} ->
             add_error({L,leex,not_yet_implemented}, St);
@@ -514,20 +514,20 @@ sub_repl([{St,L}|Ss], Rep, S, Pos) ->
     substr(S, Pos, St-Pos) ++ Rep ++ Rs;
 sub_repl([], _Rep, S, Pos) -> substr(S, Pos).
 
-%% parse_code(State, File, Line, REAs, Actions) ->
+%% parse_code(File, Line, REAs, Actions, State) ->
 %%       {ok,RegExpActions,Actions,CodeLine,NewState}.
 %%  Finds the line and the position where the code section of the file
 %%  begins. This must exist.
 
-parse_code(St, Ifile, {ok,?CODE_HEAD ++ Rest,CodeL}, REAs, As) ->
-    St1 = warn_ignored_chars(St, CodeL, Rest),
+parse_code(Ifile, {ok,?CODE_HEAD ++ Rest,CodeL}, REAs, As, St) ->
+    St1 = warn_ignored_chars(CodeL, Rest, St),
     {ok, CodePos} = file:position(Ifile, cur),
     %% Just count the lines; copy the code from file to file later.
     NCodeLines = count_lines(Ifile, 0),
     {ok,REAs,As,{CodeL,CodePos,NCodeLines},St1};
-parse_code(St, _, {ok,_,L}, _, _) -> 
+parse_code(_, {ok,_,L}, _, _, St) -> 
     add_error({L,leex,missing_code}, St);
-parse_code(St, _, {eof,L}, _, _) -> 
+parse_code(_, {eof,L}, _, _, St) -> 
     add_error({L,leex,missing_code}, St).
 
 count_lines(File, N) ->
@@ -550,7 +550,7 @@ nextline(Ifile, L) ->
             end
     end.
 
-warn_ignored_chars(St, Line, S) ->
+warn_ignored_chars(Line, S, St) ->
     case non_white(S) of
         [] -> St;
         _ -> add_warning(Line, ignored_characters, St)
