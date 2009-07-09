@@ -437,7 +437,9 @@ parse_rules_end(_, NextLine, REAs, As, St) ->
 %% action has been read. Keep track of line number.
 
 collect_rule(Ifile, Chars, L0) ->
-    {match,St,Len} = regexp:first_match(Chars, "[^ \t\r\n]+"),
+    %% Erlang strings are 1 based, but re 0 :-(
+    {match,[{St0,Len}|_]} = re:run(Chars, "[^ \t\r\n]+"),
+    St = St0 + 1,
     %%io:fwrite("RE = ~p~n", [substr(Chars, St, Len)]),
     case collect_action(Ifile, substr(Chars, St+Len), L0, []) of
         {ok,[{':',_}|Toks],L1} -> {ok,substr(Chars, St, Len),Toks,L1};
@@ -502,21 +504,17 @@ var_used(Name, Toks) ->
 %% here as it uses info in replace string (&).
 
 parse_rule_regexp(RE0, [{M,Exp}|Ms]) ->
-    case regexp:matches(RE0, "{" ++ M ++ "}") of
-        {match,Mats} ->
-            RE1 = sub_repl(Mats, Exp, RE0, 1),
-            parse_rule_regexp(RE1, Ms);
-        {error,_} ->
-            parse_rule_regexp(RE0, Ms)
-    end;
+    Split= re:split(RE0, "\\{" ++ M ++ "\\}", [{return,list}]),
+    RE1 = split_concat(Split, Exp),
+    parse_rule_regexp(RE1, Ms);
 parse_rule_regexp(RE, []) ->
     %%io:fwrite("RE = ~p~n", [RE]),
     regexp:parse(RE).
 
-sub_repl([{St,L}|Ss], Rep, S, Pos) ->
-    Rs = sub_repl(Ss, Rep, S, St+L),
-    substr(S, Pos, St-Pos) ++ Rep ++ Rs;
-sub_repl([], _Rep, S, Pos) -> substr(S, Pos).
+split_concat([Last], _) -> Last;		%Nothing after last segment
+split_concat([Bef|Aft], Rep) ->
+    Bef ++ Rep ++ split_concat(Aft, Rep);
+split_concat([], _) -> [].
 
 %% parse_code(File, Line, State) -> {ok,Code,NewState}.
 %%  Finds the line and the position where the code section of the file
@@ -1283,6 +1281,7 @@ quote($\v) -> "\\\\v";
 quote($\d) -> "\\\\d";
 quote($\\) -> "\\\\";
 quote(C) when is_integer(C) ->
+    %% Must remove the $ and get the \'s right.
     case io_lib:write_unicode_char(C) of
 	[$$,$\\|Cs] -> "\\\\" ++ Cs;
 	[$$|Cs] -> Cs
