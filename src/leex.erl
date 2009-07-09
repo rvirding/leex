@@ -487,9 +487,12 @@ pack_crs([]) -> [].
 
 comp_class(Cc) ->
     Crs = char_class(Cc),
-    %%io:fwrite("comp: ~p\n", [Crs]),
-    comp_crs(Crs, 0).
+    Comp = comp_crs(Crs, 0),
+    %% io:fwrite("comp: ~p\n      ~p\n", [Crs,Comp]),
+    Comp.
 
+comp_crs([{0,C2}|Crs], 0) ->			%Get first range right
+    comp_crs(Crs, C2+1);
 comp_crs([{C1,C2}|Crs], Last) ->
     [{Last,C1-1}|comp_crs(Crs, C2+1)];
 comp_crs([], Last) -> [{Last,maxchar}].
