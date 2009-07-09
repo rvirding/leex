@@ -1,3 +1,9 @@
+2009-07-09  Robert Virding  <rv@stanislaw.local>
+
+	* leex.erl (pp_tokens): Improved code output.
+	(comp_crs): Get first range right.
+	(quote): Handle all unicode characters.
+
 2009-07-08  Robert Virding  <rv@stanislaw.local>
 
 	* leex.erl: State always last argument, and last return value!

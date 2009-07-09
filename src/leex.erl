@@ -34,6 +34,8 @@
 
 -export([compile/3,file/1,file/2,format_error/1]).
 
+-compile(export_all).
+
 -import(lists, [member/2,reverse/1,sort/1,keysearch/3,keysort/2,
                 map/2,foldl/3,foreach/2,flatmap/2,
                 delete/2,keydelete/3]).
@@ -667,10 +669,10 @@ build_nfa(C, N, F, NFA) when is_integer(C) ->
     {[#nfa_state{no=F,edges=[{[{C,C}],N}]}|NFA],N+1,N}.
 
 char_class(Cc) ->
-    Crs = lists:foldl(fun ({C1,C2}, Set) -> add_element({C1,C2}, Set);
-                          (C, Set) -> add_element({C,C}, Set)
-                      end, ordsets:new(), Cc),
-    pack_crs(ordsets:to_list(Crs)).
+    Crs = foldl(fun ({C1,C2}, Set) -> add_element({C1,C2}, Set);
+		    (C, Set) -> add_element({C,C}, Set)
+		end, ordsets:new(), Cc),
+    pack_crs(Crs).				%An ordset IS a list!
 
 pack_crs([{C1,C2}=Cr,{C3,C4}|Crs]) when C1 =< C3, C2 >= C4 ->
     %% C1      C2
@@ -689,9 +691,12 @@ pack_crs([]) -> [].
 
 comp_class(Cc) ->
     Crs = char_class(Cc),
-    %%io:fwrite("comp: ~p\n", [Crs]),
-    comp_crs(Crs, 0).
+    Comp = comp_crs(Crs, 0),
+    %% io:fwrite("comp: ~p\n      ~p\n", [Crs,Comp]),
+    Comp.
 
+comp_crs([{0,C2}|Crs], 0) ->			%Get first range right
+    comp_crs(Crs, C2+1);
 comp_crs([{C1,C2}|Crs], Last) ->
     [{Last,C1-1}|comp_crs(Crs, C2+1)];
 comp_crs([], Last) -> [{Last,maxchar}].
@@ -739,7 +744,7 @@ build_dfa(Set, Us, N, Ts, Ms, NFA) ->
     Crs1 = lists:usort(Crs0),            % Must remove duplicates!
     %% Build list of disjoint test ranges.
     Test = disjoint_crs(Crs1),
-    %%io:fwrite("bd: ~p\n    ~p\n    ~p\n    ~p\n", [Set,Crs0,Crs1,Test]),
+    %% io:fwrite("bd: ~p\n    ~p\n    ~p\n    ~p\n", [Set,Crs0,Crs1,Test]),
     build_dfa(Test, Set, Us, N, Ts, Ms, NFA).
 
 %% disjoint_crs([CharRange]) -> [CharRange].
@@ -941,7 +946,7 @@ out_file(St0, DFA, DF, Actions, Code) ->
                         after file:close(Ofile)
                         end;
                     {error,Error} ->
-                        verbose_print(St0, "not ok~n", []),
+                        verbose_print(St0, "error~n", []),
                         add_error({none,leex,{file_error,Error}}, St0)
                 end
             after file:close(Ifile)
@@ -1134,13 +1139,13 @@ prep_out_actions(As) ->
     map(fun ({A,empty_action}) ->
                 {A,empty_action};
             ({A,Code,TokenChars,TokenLen,TokenLine}) ->
-                Vs = [{"TokenChars",TokenChars},
-                      {"TokenLen",TokenLen},
-                      {"TokenLine",TokenLine},
-                      {"YYtcs",TokenChars},
-                      {"TokenLen",TokenLen or TokenChars}],
-                Vars = [if F -> S; true -> "_" end || {S,F} <- Vs],
-                Name = list_to_atom(lists:concat([yy_,A,'_'])),
+		Vs = [{TokenChars,"TokenChars"},
+		      {TokenLen,"TokenLen"},
+		      {TokenLine,"TokenLine"},
+		      {TokenChars,"YYtcs"},
+		      {TokenLen or TokenChars,"TokenLen"}],
+		Vars = [if F -> S; true -> "_" end || {F,S} <- Vs],
+                Name = list_to_atom(lists:concat([yyaction_,A])),
                 [Chars,Len,Line,_,_] = Vars,
                 Args = [V || V <- [Chars,Len,Line], V =/= "_"],
                 ArgsChars = string:join(Args, ", "),
@@ -1168,29 +1173,34 @@ out_action_code(File, XrlFile, {_A,Code,_Vars,Name,Args,ArgsChars}) ->
     {line, L} = erl_scan:token_info(hd(Code), line),
     output_file_directive(File, XrlFile, L-2),
     io:fwrite(File, "~s(~s) ->~n", [Name, ArgsChars]),
-    io:fwrite(File, "    ~s.\n", [pp_tokens(Code, L)]).
+    io:fwrite(File, "    ~s\n", [pp_tokens(Code, L)]).
 
-%% Keeps the line breaks of the original code.
-pp_tokens(Tokens, Line0) ->
-    lists:concat(pp_tokens1(Tokens, Line0, [])).
+%% pp_tokens(Tokens, Line) -> [char()].
+%%  Prints the tokens keeping the line breaks of the original code.
+
+pp_tokens(Tokens, Line0) -> pp_tokens(Tokens, Line0, none).
     
-pp_tokens1([], _Line0, _T0) ->
-    [];
-pp_tokens1([T | Ts], Line0, T0) ->
+pp_tokens([], _Line0, _) -> [];
+pp_tokens([T | Ts], Line0, Prev) ->
     {line, Line} = erl_scan:token_info(T, line),
-    [pp_sep(Line, Line0, T0), pp_symbol(T) | pp_tokens1(Ts, Line, T)].
+    [pp_sep(Line, Line0, Prev, T), pp_symbol(T) | pp_tokens(Ts, Line, T)].
 
-pp_symbol({var,_,Var}) -> Var;
+pp_symbol({var,_,Var}) -> atom_to_list(Var);
 pp_symbol({_,_,Symbol}) -> io_lib:fwrite("~p", [Symbol]);
-pp_symbol({dot, _}) -> "";
-pp_symbol({Symbol, _}) -> Symbol.
+pp_symbol({dot, _}) -> ".";
+pp_symbol({Symbol, _}) -> atom_to_list(Symbol).
 
-pp_sep(Line, Line0, T0) when Line > Line0 -> 
-    ["\n    " | pp_sep(Line - 1, Line0, T0)];
-pp_sep(_Line, _Line0, {'.',_}) -> 
-    "";
-pp_sep(_Line, _Line0, _T0) -> 
-    " ".
+pp_sep(Line, Line0, Prev, T) when Line > Line0 -> 
+    ["\n    " | pp_sep(Line - 1, Line0, Prev, T)];
+pp_sep(_, _, {'.',_}, _) -> "";			%No space after '.' (not a dot)
+pp_sep(_, _, {'#',_}, _) -> "";			%No space after '#'
+pp_sep(_, _, {'(',_}, _) -> "";			%No space after '('
+pp_sep(_, _, {'[',_}, _) -> "";			%No space after '['
+pp_sep(_, _, _, {'.',_}) -> "";			%No space before '.'
+pp_sep(_, _, _, {'#',_}) -> "";			%No space before '#'
+pp_sep(_, _, _, {',',_}) -> "";			%No space before ','
+pp_sep(_, _, _, {')',_}) -> "";			%No space before ')'
+pp_sep(_, _, _, _) -> " ".
 
 %% out_dfa_graph(LeexState, DFA, DfaStart) -> ok | error.
 %%  Writes the DFA to a .dot file in DOT-format which can be viewed
@@ -1210,7 +1220,7 @@ out_dfa_graph(St, DFA, DF) ->
             after file:close(Gfile)
             end;
         {error,Error} ->
-            verbose_print(St, "not ok~n", []),
+            verbose_print(St, "error~n", []),
             add_error({none,leex,{file_error,Error}}, St)
     end.
 
@@ -1243,6 +1253,7 @@ out_dfa_edges(File, DFA) ->
 
 dfa_edgelabel([C]) when is_integer(C) -> quote(C);
 dfa_edgelabel(Cranges) ->
+    %% io:fwrite("el: ~p\n", [Cranges]),
     "[" ++ map(fun ({A,B}) -> [quote(A), "-", quote(B)];
                    (C)     -> [quote(C)]
                end, Cranges) ++ "]".
@@ -1271,9 +1282,10 @@ quote($\e) -> "\\\\e";
 quote($\v) -> "\\\\v";
 quote($\d) -> "\\\\d";
 quote($\\) -> "\\\\";
-quote(C) when 32 =< C, C =< 126 -> [C];
-quote(C) when 0 =< C, C =< 255 ->
-    <<T2:2,T1:3,T0:3>> = <<C>>,
-    ["\\\\", $0+T2, $0+T1, $0+T0];
+quote(C) when is_integer(C) ->
+    case io_lib:write_unicode_char(C) of
+	[$$,$\\|Cs] -> "\\\\" ++ Cs;
+	[$$|Cs] -> Cs
+    end;
 quote(maxchar) ->
-    "MAX".
+    "MAXCHAR".
