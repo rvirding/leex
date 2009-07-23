@@ -1,3 +1,9 @@
+2009-07-23  Robert Virding  <rv@stanislaw.local>
+
+	* leex.erl: Added regexp parser.
+	
+	* leex.erl (build_nfa): Modified to accept new regexp AST.
+
 2009-07-10  Robert Virding  <rv@stanislaw.local>
 
 	* leex.erl (parse_rule_regexp, collect_rule): Now use re for

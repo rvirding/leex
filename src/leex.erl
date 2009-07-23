@@ -36,16 +36,16 @@
 
 -compile(export_all).
 
--import(lists, [member/2,reverse/1,sort/1,keysearch/3,keysort/2,
+-import(lists, [member/2,reverse/1,sort/1,keysearch/3,keysort/2,keydelete/3,
                 map/2,foldl/3,foreach/2,flatmap/2,
-                delete/2,keydelete/3]).
--import(string, [substr/2,substr/3,span/2,tokens/2]).
+                delete/2]).
+-import(string, [substr/2,substr/3,span/2,tokens/2,join/2]).
 -import(ordsets, [is_element/2,add_element/2,union/2]).
 -import(orddict, [store/3]).
 
 -include_lib("stdlib/include/erl_compile.hrl").
 
--define(LEEXINC, "leexinc.hrl").        % Include file
+-define(LEEXINC, "leexinc.hrl").		%Include file
 -define(LEEXLIB, parsetools).			%Leex is in lib parsetools
 %%-define(LEEXLIB, leex).				%Leex is in lib leex
 
@@ -124,13 +124,24 @@ format_error(missing_rules) -> "missing Rules";
 format_error(missing_code) -> "missing Erlang code";
 format_error(empty_rules) -> "no rules";
 format_error(bad_rule) -> "bad rule";
-format_error({regexp,E})-> ["bad regexp `",regexp:format_error(E),"'"];
+format_error({regexp_error,E})->
+    Es = case E of
+	     {interval_range,_} -> "interval range";
+	     {unterminated,Cs} ->
+		 "unterminated " ++ Cs;
+	     {illegal_char,Cs} ->
+		 "illegal character " ++ Cs;
+	     {posix_cc,What} ->
+		 ["illegal POSIX character class ",io_lib:write_string(What)];
+	     {char_class,What} ->
+		 ["illegal character class ",io_lib:write_string(What)];
+	     missing_char -> "missing character"
+	 end,
+    ["bad regexp `",Es,"'"];
 format_error({after_regexp,S}) ->
     ["bad code after regexp ",io_lib:write_string(S)];
 format_error(ignored_characters) ->
-    "ignored characters";
-format_error(not_yet_implemented) ->
-    "anchoring a regular expression with ^ and $ is not yet implemented".
+    "ignored characters".
 
 %%%
 %%% Local functions
@@ -374,6 +385,7 @@ parse_head(Ifile, St) -> {ok,nextline(Ifile, 0),St}.
 
 %% parse_defs(File, Line, State) -> {ok,NextLine,Macros,State}.
 %%  Parse the macro definition section of a file. This must exist.
+%%  The section is ended by a non-blank line which is not a macro def.
 
 parse_defs(Ifile, {ok,?DEFS_HEAD ++ Rest,L}, St) ->
     St1 = warn_ignored_chars(L, Rest, St),
@@ -384,8 +396,11 @@ parse_defs(_, {eof,L}, St) ->
     add_error({L,leex,missing_defs}, St).
 
 parse_defs(Ifile, {ok,Chars,L}=Line, Ms, St) ->
-    case tokens(Chars, " \t\n") of      	%Also strips \n from eol!
-        [Name,"=",Def] ->
+    %% This little beauty matches out a macro definition, RE's are so clear.
+    MS = "^[ \t]*([A-Z_][A-Za-z0-9_]*)[ \t]*=[ \t]*([^ \t\r\n]*)[ \t\r\n]*$",
+    case re:run(Chars, MS, [{capture,all_but_first,list}]) of
+	{match,[Name,Def]} ->
+	    %%io:fwrite("~p = ~p\n", [Name,Def]),
             parse_defs(Ifile, nextline(Ifile, L), [{Name,Def}|Ms], St);
         _ -> {ok,Line,Ms,St}			%Anything else
     end;
@@ -457,21 +472,21 @@ collect_action(Ifile, Chars, L0, Cont0) ->
             collect_action(Ifile, io:get_line(Ifile, leex), L0+1, Cont1)
     end.
 
-%% parse_rule(RegExpString, RegExpLine, ActionTokens, Macros, Counter, State)
+%% parse_rule(RegExpString, RegExpLine, ActionTokens, Macros, Counter, State) ->
+%%      {ok,{RE,Action},ActionData,State}.
 %%  Parse one regexp after performing macro substition.
 
 parse_rule(S, Line, [{dot,_}], Ms, N, St) ->
-    case parse_rule_regexp(S, Ms) of
+    case parse_rule_regexp(S, Ms, St) of
         {ok,R} ->
-            ok = anchors_not_yet_implemented(R, Line, St),
             {ok,{R,N},{N,empty_action},St};
         {error,E} ->
             add_error({Line,leex,{regexp,E}}, St)
     end;
 parse_rule(S, Line, Atoks, Ms, N, St) ->
-    case parse_rule_regexp(S, Ms) of
+    case parse_rule_regexp(S, Ms, St) of
         {ok,R} ->
-            ok = anchors_not_yet_implemented(R, Line, St),
+	    %%io:fwrite("RE = ~p~n", [R]),
             case erl_parse:parse_exprs(Atoks) of
                 {ok,_Aes} ->
                     %% Check for token variables.
@@ -483,14 +498,7 @@ parse_rule(S, Line, Atoks, Ms, N, St) ->
                     add_error({Line,leex,{after_regexp,S}}, St)
             end;
         {error,E} ->
-            add_error({Line,leex,{regexp,E}}, St)
-    end.
-
-anchors_not_yet_implemented(R, L, St) ->
-    case catch build_nfa(R, 1, 0) of
-        {'EXIT', _} ->
-            add_error({L,leex,not_yet_implemented}, St);
-        _ -> ok
+            add_error({Line,leex,E}, St)
     end.
 
 var_used(Name, Toks) ->
@@ -499,22 +507,21 @@ var_used(Name, Toks) ->
         _ -> false
     end.
 
-%% parse_rule_regexp(RegExpString, Macros) -> {ok,RegExp} | {error,Error}.
-%% Substitute in macros and parse RegExpString. Cannot use regexp:gsub
+%% parse_rule_regexp(RegExpString, Macros, State) -> {ok,RegExp} | {error,Error}.
+%% Substitute in macros and parse RegExpString. Cannot use re:replace
 %% here as it uses info in replace string (&).
 
-parse_rule_regexp(RE0, [{M,Exp}|Ms]) ->
+parse_rule_regexp(RE0, [{M,Exp}|Ms], St) ->
     Split= re:split(RE0, "\\{" ++ M ++ "\\}", [{return,list}]),
-    RE1 = split_concat(Split, Exp),
-    parse_rule_regexp(RE1, Ms);
-parse_rule_regexp(RE, []) ->
+    RE1 = string:join(Split, Exp),
+    parse_rule_regexp(RE1, Ms, St);
+parse_rule_regexp(RE, [], _) ->
     %%io:fwrite("RE = ~p~n", [RE]),
-    regexp:parse(RE).
-
-split_concat([Last], _) -> Last;		%Nothing after last segment
-split_concat([Bef|Aft], Rep) ->
-    Bef ++ Rep ++ split_concat(Aft, Rep);
-split_concat([], _) -> [].
+    case re_parse(RE) of
+	{ok,R,[]} -> {ok,R};
+	{ok,_,[C|_]} -> {error,{regexp_error,{illegal_char,[C]}}};
+	{error,E} -> {error,{regexp_error,E}}
+    end.
 
 %% parse_code(File, Line, State) -> {ok,Code,NewState}.
 %%  Finds the line and the position where the code section of the file
@@ -559,6 +566,254 @@ warn_ignored_chars(Line, S, St) ->
 
 non_white(S) ->
     [C || C <- S, C > $\s, C < $\200 orelse C > $\240].
+
+%% This is the regular expression grammar used. It is equivalent to the
+%% one used in AWK, except that we allow ^ $ to be used anywhere and fail
+%% in the matching.
+%%
+%% reg -> alt : '$1'.
+%% alt -> seq "|" seq ... : {alt,['$1','$2'...]}.
+%% seq -> repeat repeat ... : {seq,['$1','$2'...]}.
+%% repeat -> repeat "*" : {kclosure,'$1'}.
+%% repeat -> repeat "+" : {pclosure,'$1'}.
+%% repeat -> repeat "?" : {optional,'$1'}.
+%% repeat -> repeat "{" [Min],[Max] "}" : {interval,'$1',Min,Max}
+%% repeat -> single : '$1'.
+%% single -> "(" reg ")" : {sub,'$2',Number}.
+%% single -> "^" : bos/bol.
+%% single -> "$" : eos/eol.
+%% single -> "." : any.
+%% single -> "[" class "]" : {char_class,char_class('$2')}
+%% single -> "[" "^" class "]" : {comp_class,char_class('$3')}.
+%% single -> "\"" chars "\"" : {lit,'$2'}.
+%% single -> "\\" char : {lit,['$2']}.
+%% single -> char : {lit,['$1']}.
+%% single -> empty : epsilon.
+%%  The grammar of the current regular expressions. The actual parser
+%%  is a recursive descent implementation of the grammar.
+
+%% re_parse(Chars) -> {ok,RegExp,RestChars} | {error,Error}.
+
+re_parse(Cs0) ->
+    case catch re_reg(Cs0, 0) of
+	{RE,_,Cs1} -> {ok,RE,Cs1};
+	{parse_error,E} -> {error,E}
+    end.
+
+parse_error(E) -> throw({parse_error,E}).
+
+re_reg(Cs, Sn) -> re_alt(Cs, Sn).
+
+re_alt(Cs0, Sn0) ->
+    {L,Sn1,Cs1} = re_seq(Cs0, Sn0),
+    case re_alt1(Cs1, Sn1) of
+	{[],Sn2,Cs2} -> {L,Sn2,Cs2};
+	{Rs,Sn2,Cs2} -> {{alt,[L|Rs]},Sn2,Cs2}
+    end.
+
+re_alt1([$||Cs0], Sn0) ->
+    {L,Sn1,Cs1} = re_seq(Cs0, Sn0),
+    {Rs,Sn2,Cs2} = re_alt1(Cs1, Sn1),
+    {[L|Rs],Sn2,Cs2};
+re_alt1(Cs, Sn) -> {[],Sn,Cs}.
+
+%% Parse a sequence of regexps. Don't allow the empty sequence.
+%% re_seq(Cs0, Sn0) ->
+%%     {L,Sn1,Cs1} = repeat(Cs0, Sn0),
+%%     case re_seq1(Cs1, Sn1) of
+%% 	{[],Sn2,Cs2} -> {L,Sn2,Cs2};
+%% 	{Rs,Sn2,Cs2} -> {{seq,[L|Rs]},Sn2,Cs2}
+%%     end.
+
+%% re_seq(Chars, SubNumber) -> {RegExp,SubNumber,Chars}.
+%% Parse a sequence of regexps. Allow the empty sequence, returns epsilon.
+
+re_seq(Cs0, Sn0) ->
+    case re_seq1(Cs0, Sn0) of
+	{[],Sn1,Cs1} -> {epsilon,Sn1,Cs1};
+	{[R],Sn1,Cs1} -> {R,Sn1,Cs1};
+	{Rs,Sn1,Cs1} -> {{seq,Rs},Sn1,Cs1}
+    end.
+
+re_seq1([C|_]=Cs0, Sn0) when C /= $|, C /= $) ->
+    {L,Sn1,Cs1} = re_repeat(Cs0, Sn0),
+    {Rs,Sn2,Cs2} = re_seq1(Cs1, Sn1),
+    {[L|Rs],Sn2,Cs2};
+re_seq1(Cs, Sn) -> {[],Sn,Cs}.
+
+re_repeat(Cs0, Sn0) ->
+    {S,Sn1,Cs1} = re_single(Cs0, Sn0),
+    re_repeat1(Cs1, Sn1, S).
+
+re_repeat1([$*|Cs], Sn, S) -> re_repeat1(Cs, Sn, {kclosure,S});
+re_repeat1([$+|Cs], Sn, S) -> re_repeat1(Cs, Sn, {pclosure,S});
+re_repeat1([$?|Cs], Sn, S) -> re_repeat1(Cs, Sn, {optional,S});
+re_repeat1([${|Cs0], Sn, S) ->			% $}
+    case re_interval_range(Cs0) of
+	{Min,Max,[$}|Cs1]} when is_integer(Min), is_integer(Max), Min =< Max ->
+	    re_repeat1(Cs1, Sn, {interval,S,Min,Max});
+	{Min,Max,[$}|Cs1]} when is_integer(Min), is_atom(Max) ->
+	    re_repeat1(Cs1, Sn, {interval,S,Min,Max});
+	_ -> parse_error({interval_range,"{"})
+    end;
+re_repeat1(Cs, Sn, S) -> {S,Sn,Cs}.
+
+%% re_single(Chars, SubNumber) -> {RegExp,SubNumber,Chars}.
+%% Parse a re_single regexp.
+
+re_single([$(|Cs0], Sn0) ->			% $)
+    Sn1 = Sn0 + 1,
+    case re_reg(Cs0, Sn1) of
+	{S,Sn2,[$)|Cs1]} -> {S,Sn2,Cs1};
+	%%{S,Sn2,[$)|Cs1]} -> {{sub,S,Sn1},Sn2,Cs1};
+	_ -> parse_error({unterminated,"("})
+    end;
+%% These are not legal inside a regexp.
+%% re_single([$^|Cs], Sn) -> {bos,Sn,Cs};
+%% re_single([$$|Cs], Sn) -> {eos,Sn,Cs};
+%% re_single([$.|Cs], Sn) -> {any,Sn,Cs};
+re_single([$.|Cs], Sn) -> {{comp_class,"\n"},Sn,Cs};
+re_single("[^" ++ Cs0, Sn) ->
+    case re_char_class(Cs0) of
+	{Cc,[$]|Cs1]} -> {{comp_class,Cc},Sn,Cs1};
+	_ -> parse_error({unterminated,"["})
+    end;
+re_single([$[|Cs0], Sn) ->
+    case re_char_class(Cs0) of
+	{Cc,[$]|Cs1]} -> {{char_class,Cc},Sn,Cs1};
+	_ -> parse_error({unterminated,"["})
+    end;
+re_single([$\\|Cs0], Sn) ->
+    {C,Cs1} = re_char($\\, Cs0),
+    {{lit,[C]},Sn,Cs1};
+re_single([C|Cs0], Sn) ->
+    case special_char(C) of
+	true -> parse_error({illegal_char,[C]});
+	false ->
+	    {C,Cs1} = re_char(C, Cs0),
+	    {{lit,[C]},Sn,Cs1}
+    end;
+re_single([], _) -> parse_error(missing_char).
+
+-define(IS_HEX(C), C >= $0 andalso C =< $9 orelse
+	C >= $A andalso C =< $F orelse
+	C >= $a andalso C =< $f).
+
+%% re_char(Char, Chars) -> {CharValue,Chars}.
+%%  Reads one character value from the input list, it knows about escapes.
+
+re_char($\\, [O1,O2,O3|S]) when
+  O1 >= $0, O1 =< $7, O2 >= $0, O2 =< $7, O3 >= $0, O3 =< $7 ->
+    {(O1*8 + O2)*8 + O3 - 73*$0,S};
+re_char($\\, [$x,H1,H2|S]) when ?IS_HEX(H1), ?IS_HEX(H2) ->
+    {erlang:list_to_integer([H1,H2], 16),S};
+re_char($\\,[$x,${|S]) -> re_hex(S, []);
+re_char($\\,[$x|_]) ->
+    parse_error({illegal_char,"\\x"});
+re_char($\\, [C|S]) -> {escape_char(C),S};
+re_char($\\, []) -> parse_error({unterminated,"\\"});
+re_char(C, S) -> {C,S}.				%Just this character
+
+re_hex([C|Cs], L) when ?IS_HEX(C) -> re_hex(Cs, [C|L]);
+re_hex([$}|S], L) -> {erlang:list_to_integer(lists:reverse(L), 16),S};
+re_hex(_, _) -> parse_error({unterminated,"\\x{"}).
+
+%% special_char(Char) -> bool().
+%% These are the special characters for an ERE.
+%% N.B. ]}) are only special in the context after [{(.
+
+special_char($^) -> true;
+special_char($.) -> true;
+special_char($[) -> true;
+special_char($$) -> true;
+special_char($() -> true;
+special_char($)) -> true;
+special_char($|) -> true;
+special_char($*) -> true;
+special_char($+) -> true;
+special_char($?) -> true;
+special_char(${) -> true;
+special_char($\\) -> true;
+special_char(_) -> false.
+
+%% re_char_class(Chars) -> {CharClass,Chars}.
+%% Parse a character class.
+
+re_char_class([$]|Cs]) -> re_char_class(Cs, [$]]);	%Special case this.
+re_char_class(Cs) -> re_char_class(Cs, []).
+
+re_char_class("[:" ++ Cs0, Cc) ->			%POSIX char class
+    case posix_cc(Cs0) of
+	{Pcl,":]" ++ Cs1} -> re_char_class(Cs1, [{posix,Pcl}|Cc]);
+	{_,Cs1} -> parse_error({posix_cc,string_between(Cs0, Cs1)})
+    end;
+re_char_class([C1|Cs0], Cc) when C1 /= $] ->
+    case re_char(C1, Cs0) of
+	{Cf,[$-,C2|Cs1]} when C2 /= $] ->
+	    case re_char(C2, Cs1) of
+		{Cl,Cs2} when Cf < Cl -> re_char_class(Cs2, [{range,Cf,Cl}|Cc]);
+		{_,Cs2} ->
+		    parse_error({char_class,string_between([C1|Cs0], Cs2)})
+	    end;
+	{C,Cs1} -> re_char_class(Cs1, [C|Cc])
+    end;
+re_char_class(Cs, Cc) -> {reverse(Cc),Cs}.	%Preserve order
+
+%% posix_cc(String) -> {PosixClass,RestString}.
+%%  Handle POSIX character classes.
+
+posix_cc("alnum" ++ Cs) -> {alnum,Cs};
+posix_cc("alpha" ++ Cs) -> {alpha,Cs};
+posix_cc("blank" ++ Cs) -> {blank,Cs};
+posix_cc("cntrl" ++ Cs) -> {cntrl,Cs};
+posix_cc("digit" ++ Cs) -> {digit,Cs};
+posix_cc("graph" ++ Cs) -> {graph,Cs};
+posix_cc("lower" ++ Cs) -> {lower,Cs};
+posix_cc("print" ++ Cs) -> {print,Cs};
+posix_cc("punct" ++ Cs) -> {punct,Cs};
+posix_cc("space" ++ Cs) -> {space,Cs};
+posix_cc("upper" ++ Cs) -> {upper,Cs};
+posix_cc("xdigit" ++ Cs) -> {xdigit,Cs};
+posix_cc(Cs) -> parse_error({posix_cc,substr(Cs, 1, 5)}).
+
+escape_char($n) -> $\n;				%\n = LF
+escape_char($r) -> $\r;				%\r = CR
+escape_char($t) -> $\t;				%\t = TAB
+escape_char($v) -> $\v;				%\v = VT
+escape_char($b) -> $\b;				%\b = BS
+escape_char($f) -> $\f;				%\f = FF
+escape_char($e) -> $\e;				%\e = ESC
+escape_char($s) -> $\s;				%\s = SPACE
+escape_char($d) -> $\d;				%\d = DEL
+escape_char(C) -> C.				%Pass it straight through
+
+%% re_interval_range(Chars) -> {Min,Max,RestChars}.
+%% NoInt     -> none,none
+%% Int       -> Int,none
+%% Int,      -> Int,any
+%% Int1,Int2 -> Int1,Int2
+
+re_interval_range(Cs0) ->
+    case re_number(Cs0) of
+	{none,Cs1} -> {none,none,Cs1};
+	{N,[$,|Cs1]} ->
+	    case re_number(Cs1) of
+		{none,Cs2} -> {N,any,Cs2};
+		{M,Cs2} -> {N,M,Cs2}
+	    end;
+	{N,Cs1} -> {N,none,Cs1}
+    end.
+
+re_number([C|Cs]) when C >= $0, C =< $9 ->
+    re_number(Cs, C - $0);
+re_number(Cs) -> {none,Cs}.
+
+re_number([C|Cs], Acc) when C >= $0, C =< $9 ->
+    re_number(Cs, 10*Acc + (C - $0));
+re_number(Cs, Acc) -> {Acc,Cs}.
+
+string_between(Cs1, Cs2) ->
+    substr(Cs1, 1, length(Cs1)-length(Cs2)).
 
 %% We use standard methods, Thompson's construction and subset
 %% construction, to create first an NFA and then a DFA from the
@@ -615,8 +870,8 @@ build_nfa_list([], NFA, Firsts, Free) ->
 epsilon_trans(Firsts) -> [ {epsilon,F} || F <- Firsts ].
 
 %% build_nfa(RegExp, NextState, Action) -> {NFA,NextState,FirstState}.
-%%  When building the NFA states for a ??? we don't build the end
-%%  state, just allocate a State for it and return this state
+%%  When building the NFA states for a regexp we don't build the end
+%%  state, just allocate a State for it and return this state's
 %%  number. This allows us to avoid building unnecessary states for
 %%  concatenation which would then have to be removed by overwriting
 %%  an existing state.
@@ -626,21 +881,19 @@ build_nfa(RE, N0, Action) ->
     {[#nfa_state{no=E,accept={accept,Action}}|NFA],N1,N0}.
 
 %% build_nfa(RegExp, NextState, FirstState, NFA) -> {NFA,NextState,EndState}.
-%%  The NFA is a list of nfa_state is no predefined order. The state
-%%  number of the returned EndState is already allocated!
+%%  Build an NFA from the RegExp. NFA is a list of #nfa_state{} in no
+%%  predefined order. NextState is the number of the next free state
+%%  to use, FirstState is the the state which must be the start for
+%%  this regexp as a previous regexp refers to it, EndState is the
+%%  state to which this NFA will exit to. The number of the returned
+%%  EndState is already allocated!
 
-build_nfa({'or',RE1,RE2}, N0, F, NFA0) ->
-    {NFA1,N1,E1} = build_nfa(RE1, N0+1, N0, NFA0),
-    {NFA2,N2,E2} = build_nfa(RE2, N1+1, N1, NFA1),
-    E = N2,                             % End state
-    {[#nfa_state{no=F,edges=[{epsilon,N0},{epsilon,N1}]},
-      #nfa_state{no=E1,edges=[{epsilon,E}]},
-      #nfa_state{no=E2,edges=[{epsilon,E}]}|NFA2],
-     N2+1,E};
-build_nfa({concat,RE1, RE2}, N0, F, NFA0) ->
-    {NFA1,N1,E1} = build_nfa(RE1, N0, F, NFA0),
-    {NFA2,N2,E2} = build_nfa(RE2, N1, E1, NFA1),
-    {NFA2,N2,E2};
+build_nfa({alt,REs}, N, F, NFA) ->
+    build_nfa_alt(REs, N, F, NFA);
+    %% build_nfa_alt1(REs, N, F, NFA);
+build_nfa({seq,REs}, N, F, NFA) ->
+    X = build_nfa_seq(REs, N, F, NFA),
+    X = build_nfa_seq1(REs, N, F, NFA);
 build_nfa({kclosure,RE}, N0, F, NFA0) ->
     {NFA1,N1,E1} = build_nfa(RE, N0+1, N0, NFA0),
     E = N1,                             % End state
@@ -660,14 +913,77 @@ build_nfa({optional,RE}, N0, F, NFA0) ->
       #nfa_state{no=E1,edges=[{epsilon,E}]}|NFA1],
      N1+1,E};
 build_nfa({char_class,Cc}, N, F, NFA) ->
-    {[#nfa_state{no=F,edges=[{char_class(Cc),N}]}|NFA],N+1,N};
+    {[#nfa_state{no=F,edges=[{pack_cc(Cc),N}]}|NFA],N+1,N};
 build_nfa({comp_class,Cc}, N, F, NFA) ->
     {[#nfa_state{no=F,edges=[{comp_class(Cc),N}]}|NFA],N+1,N};
-build_nfa(C, N, F, NFA) when is_integer(C) ->
-    {[#nfa_state{no=F,edges=[{[{C,C}],N}]}|NFA],N+1,N}.
+build_nfa({lit,Cs}, N, F, NFA) ->		%Implicit concatenation
+    X = build_nfa_lit(Cs, N, F, NFA),
+    X = build_nfa_lit1(Cs, N, F, NFA);
+build_nfa(epsilon, N, F, NFA) ->		%Just an epsilon transition
+    {[#nfa_state{no=F,edges=[{epsilon,N}]}|NFA],N+1,N}.
 
-char_class(Cc) ->
-    Crs = foldl(fun ({C1,C2}, Set) -> add_element({C1,C2}, Set);
+%% build_nfa_lit(Chars, NextState, FirstState, NFA) -> {NFA,NextState,EndState}.
+%%  Build an NFA for the sequence of literal characters.
+
+build_nfa_lit([C|Cs], N, F, NFA0) when is_integer(C) ->
+    NFA1 = [#nfa_state{no=F,edges=[{[{C,C}],N}]}|NFA0],
+    build_nfa_lit(Cs, N+1, N, NFA1);
+build_nfa_lit([], N, F, NFA) -> {NFA,N,F}.
+
+build_nfa_lit1(Cs, N0, F0, NFA0) ->
+    foldl(fun (C, {NFA,N,F}) ->
+		  {[#nfa_state{no=F,edges=[{[{C,C}],N}]}|NFA],N+1,N}
+	  end, {NFA0,N0,F0}, Cs).
+
+%% build_nfa_seq(REs, NextState, FirstState, NFA) -> {NFA,NextState,EndState}.
+%%  Build an NFA for the regexps in a sequence.
+
+build_nfa_seq([RE|REs], N0, F, NFA0) ->
+    {NFA1,N1,E1} = build_nfa(RE, N0, F, NFA0),
+    build_nfa_seq(REs, N1, E1, NFA1);
+build_nfa_seq([], N, F, NFA) -> {NFA,N,F}.
+
+build_nfa_seq1(REs, N0, F0, NFA0) ->
+    foldl(fun (RE, {NFA,N,F}) -> build_nfa(RE, N, F, NFA) end,
+	  {NFA0,N0,F0}, REs).
+
+%% build_nfa_alt(REs, NextState, FirstState, NFA) -> {NFA,NextState,EndState}.
+%%  Build an NFA for the regexps in an alternative.
+
+build_nfa_alt([RE], N, F, NFA) ->
+    build_nfa(RE, N, F, NFA);
+build_nfa_alt([RE|REs], N0, F, NFA0) ->
+    {NFA1,N1,E1} = build_nfa(RE, N0+1, N0, NFA0),
+    {NFA2,N2,E2} = build_nfa_alt(REs, N1+1, N1, NFA1),
+    E = N2,					%End state
+    {[#nfa_state{no=F,edges=[{epsilon,N0},{epsilon,N1}]},
+      #nfa_state{no=E1,edges=[{epsilon,E}]},
+      #nfa_state{no=E2,edges=[{epsilon,E}]}|NFA2],
+     N2+1,E}.
+
+%% build_nfa_alt(REs, NextState, FirstState, NFA) -> {NFA,NextState,EndState}.
+%%  Build an NFA for the regexps in an alternative. Make one big
+%%  epsilon split state, not necessary but fun.
+
+build_nfa_alt1(REs, N0, F0, NFA0) ->
+    End = N0,					%Reserve End state first
+    {Fs,{NFA1,N1}} =
+	lists:mapfoldl(fun (RE, {NFA,N}) ->
+			       build_nfa_alt2(RE, N, End, NFA)
+		       end, {NFA0,N0+1}, REs),
+    {[#nfa_state{no=F0,edges=epsilon_trans(Fs)},
+      #nfa_state{no=End,edges=[{epsilon,N1}]}|NFA1],N1+1,N1}.
+
+build_nfa_alt2(RE, N0, End, NFA0) ->
+    {NFA1,N1,E} = build_nfa(RE, N0+1, N0, NFA0),
+    {N0,{[#nfa_state{no=E,edges=[{epsilon,End}]}|NFA1],N1}}.
+
+%% pack_cc(CharClass) -> CharClass
+%%  Pack and optimise a character class specification (bracket
+%%  expression). First sort it and then compact it.
+
+pack_cc(Cc) ->
+    Crs = foldl(fun ({range,Cf,Cl}, Set) -> add_element({Cf,Cl}, Set);
 		    (C, Set) -> add_element({C,C}, Set)
 		end, ordsets:new(), Cc),
     pack_crs(Crs).				%An ordset IS a list!
@@ -688,7 +1004,7 @@ pack_crs([Cr|Crs]) -> [Cr|pack_crs(Crs)];
 pack_crs([]) -> [].
 
 comp_class(Cc) ->
-    Crs = char_class(Cc),
+    Crs = pack_cc(Cc),
     Comp = comp_crs(Crs, 0),
     %% io:fwrite("comp: ~p\n      ~p\n", [Crs,Comp]),
     Comp.
@@ -737,9 +1053,9 @@ build_dfa(Set, Us, N, Ts, Ms, NFA) ->
     %% List of all transition sets.
     Crs0 = [Cr || S <- Set,
                   {Crs,_St} <- (element(S, NFA))#nfa_state.edges,
-                  Crs /= epsilon,        % Not an epsilon transition
+                  Crs /= epsilon,		%Not an epsilon transition
                   Cr <- Crs ],
-    Crs1 = lists:usort(Crs0),            % Must remove duplicates!
+    Crs1 = lists:usort(Crs0),			%Must remove duplicates!
     %% Build list of disjoint test ranges.
     Test = disjoint_crs(Crs1),
     %% io:fwrite("bd: ~p\n    ~p\n    ~p\n    ~p\n", [Set,Crs0,Crs1,Test]),
