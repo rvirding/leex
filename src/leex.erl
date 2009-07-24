@@ -37,7 +37,7 @@
 -compile(export_all).
 
 -import(lists, [member/2,reverse/1,sort/1,keysearch/3,keysort/2,keydelete/3,
-                map/2,foldl/3,foreach/2,flatmap/2,
+                map/2,foldl/3,foreach/2,flatmap/2,mapfoldl/3,
                 delete/2]).
 -import(string, [substr/2,substr/3,span/2,tokens/2,join/2]).
 -import(ordsets, [is_element/2,add_element/2,union/2]).
@@ -890,10 +890,8 @@ build_nfa(RE, N0, Action) ->
 
 build_nfa({alt,REs}, N, F, NFA) ->
     build_nfa_alt(REs, N, F, NFA);
-    %% build_nfa_alt1(REs, N, F, NFA);
 build_nfa({seq,REs}, N, F, NFA) ->
-    X = build_nfa_seq(REs, N, F, NFA),
-    X = build_nfa_seq1(REs, N, F, NFA);
+    build_nfa_seq(REs, N, F, NFA);
 build_nfa({kclosure,RE}, N0, F, NFA0) ->
     {NFA1,N1,E1} = build_nfa(RE, N0+1, N0, NFA0),
     E = N1,                             % End state
@@ -917,41 +915,41 @@ build_nfa({char_class,Cc}, N, F, NFA) ->
 build_nfa({comp_class,Cc}, N, F, NFA) ->
     {[#nfa_state{no=F,edges=[{comp_class(Cc),N}]}|NFA],N+1,N};
 build_nfa({lit,Cs}, N, F, NFA) ->		%Implicit concatenation
-    X = build_nfa_lit(Cs, N, F, NFA),
-    X = build_nfa_lit1(Cs, N, F, NFA);
+    build_nfa_lit(Cs, N, F, NFA);
 build_nfa(epsilon, N, F, NFA) ->		%Just an epsilon transition
     {[#nfa_state{no=F,edges=[{epsilon,N}]}|NFA],N+1,N}.
 
 %% build_nfa_lit(Chars, NextState, FirstState, NFA) -> {NFA,NextState,EndState}.
 %%  Build an NFA for the sequence of literal characters.
 
-build_nfa_lit([C|Cs], N, F, NFA0) when is_integer(C) ->
-    NFA1 = [#nfa_state{no=F,edges=[{[{C,C}],N}]}|NFA0],
-    build_nfa_lit(Cs, N+1, N, NFA1);
-build_nfa_lit([], N, F, NFA) -> {NFA,N,F}.
-
-build_nfa_lit1(Cs, N0, F0, NFA0) ->
+build_nfa_lit(Cs, N0, F0, NFA0) ->
     foldl(fun (C, {NFA,N,F}) ->
 		  {[#nfa_state{no=F,edges=[{[{C,C}],N}]}|NFA],N+1,N}
 	  end, {NFA0,N0,F0}, Cs).
 
+%% build_nfa_lit([C|Cs], N, F, NFA0) when is_integer(C) ->
+%%     NFA1 = [#nfa_state{no=F,edges=[{[{C,C}],N}]}|NFA0],
+%%     build_nfa_lit(Cs, N+1, N, NFA1);
+%% build_nfa_lit([], N, F, NFA) -> {NFA,N,F}.
+
 %% build_nfa_seq(REs, NextState, FirstState, NFA) -> {NFA,NextState,EndState}.
 %%  Build an NFA for the regexps in a sequence.
 
-build_nfa_seq([RE|REs], N0, F, NFA0) ->
-    {NFA1,N1,E1} = build_nfa(RE, N0, F, NFA0),
-    build_nfa_seq(REs, N1, E1, NFA1);
-build_nfa_seq([], N, F, NFA) -> {NFA,N,F}.
-
-build_nfa_seq1(REs, N0, F0, NFA0) ->
+build_nfa_seq(REs, N0, F0, NFA0) ->
     foldl(fun (RE, {NFA,N,F}) -> build_nfa(RE, N, F, NFA) end,
 	  {NFA0,N0,F0}, REs).
 
-%% build_nfa_alt(REs, NextState, FirstState, NFA) -> {NFA,NextState,EndState}.
-%%  Build an NFA for the regexps in an alternative.
+%% build_nfa_seq([RE|REs], N0, F, NFA0) ->
+%%     {NFA1,N1,E1} = build_nfa(RE, N0, F, NFA0),
+%%     build_nfa_seq(REs, N1, E1, NFA1);
+%% build_nfa_seq([], N, F, NFA) -> {NFA,N,F}.
 
-build_nfa_alt([RE], N, F, NFA) ->
-    build_nfa(RE, N, F, NFA);
+%% build_nfa_alt(REs, NextState, FirstState, NFA) -> {NFA,NextState,EndState}.
+%%  Build an NFA for the regexps in an alternative. N.B. we don't
+%%  handle empty alts here but the parser should never generate them
+%%  anyway.
+
+build_nfa_alt([RE], N, F, NFA) -> build_nfa(RE, N, F, NFA);
 build_nfa_alt([RE|REs], N0, F, NFA0) ->
     {NFA1,N1,E1} = build_nfa(RE, N0+1, N0, NFA0),
     {NFA2,N2,E2} = build_nfa_alt(REs, N1+1, N1, NFA1),
@@ -965,18 +963,17 @@ build_nfa_alt([RE|REs], N0, F, NFA0) ->
 %%  Build an NFA for the regexps in an alternative. Make one big
 %%  epsilon split state, not necessary but fun.
 
-build_nfa_alt1(REs, N0, F0, NFA0) ->
-    End = N0,					%Reserve End state first
-    {Fs,{NFA1,N1}} =
-	lists:mapfoldl(fun (RE, {NFA,N}) ->
-			       build_nfa_alt2(RE, N, End, NFA)
-		       end, {NFA0,N0+1}, REs),
-    {[#nfa_state{no=F0,edges=epsilon_trans(Fs)},
-      #nfa_state{no=End,edges=[{epsilon,N1}]}|NFA1],N1+1,N1}.
+%% build_nfa_alt(REs, N0, F0, NFA0) ->
+%%     E = N0,					%Must reserve End state first
+%%     {Fs,{NFA1,N1}} = mapfoldl(fun (RE, {NFA,N}) ->
+%% 				      build_nfa_alt1(RE, N, E, NFA)
+%% 			      end, {NFA0,N0+1}, REs),
+%%     {[#nfa_state{no=F0,edges=epsilon_trans(Fs)},
+%%       #nfa_state{no=E,edges=[{epsilon,N1}]}|NFA1],N1+1,N1}.
 
-build_nfa_alt2(RE, N0, End, NFA0) ->
-    {NFA1,N1,E} = build_nfa(RE, N0+1, N0, NFA0),
-    {N0,{[#nfa_state{no=E,edges=[{epsilon,End}]}|NFA1],N1}}.
+%% build_nfa_alt1(RE, N0, End, NFA0) ->
+%%     {NFA1,N1,E} = build_nfa(RE, N0+1, N0, NFA0),
+%%     {N0,{[#nfa_state{no=E,edges=[{epsilon,End}]}|NFA1],N1}}.
 
 %% pack_cc(CharClass) -> CharClass
 %%  Pack and optimise a character class specification (bracket
