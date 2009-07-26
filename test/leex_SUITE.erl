@@ -776,14 +776,14 @@ not_yet(Config) when is_list(Config) ->
                                  "Rules.\n"
                                  "$ : .\n"
                                  "Erlang code.\n">>),
-    ?line {error,[{_,[{3,leex,not_yet_implemented}]}],[]} = 
+    ?line {error,[{_,[{3,leex,{regexp,_}}]}],[]} = 
         leex:file(Filename, Ret),
     ?line ok = file:write_file(Filename,
                                <<"Definitions.\n"
                                  "Rules.\n"
                                  "^ : .\n"
                                  "Erlang code.\n">>),
-    ?line {error,[{_,[{3,leex,not_yet_implemented}]}],[]} = 
+    ?line {error,[{_,[{3,leex,{regexp,_}}]}],[]} = 
         leex:file(Filename, Ret),
 
     ok.
