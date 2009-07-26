@@ -1,8 +1,13 @@
 2009-07-24  Robert Virding  <rv@stanislaw.local>
 
+	* leex.erl (re_parse): Pass state through parsing and check for
+	posix field to allow POSIX compatible extensions.
+
+2009-07-24  Robert Virding  <rv@stanislaw.local>
+
 	* leex.erl (build_nfa, build_nfa_lit, build_nfa_seq, build_nfa_alt):
 	Finalised building NFA.
-	
+
 2009-07-23  Robert Virding  <rv@stanislaw.local>
 
 	* leex.erl: Added regexp parser.
