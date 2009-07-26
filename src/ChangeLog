@@ -1,3 +1,43 @@
+2009-07-24  Robert Virding  <rv@stanislaw.local>
+
+	* leex.erl (re_parse): Pass state through parsing and check for
+	posix field to allow POSIX compatible extensions.
+
+2009-07-24  Robert Virding  <rv@stanislaw.local>
+
+	* leex.erl (build_nfa, build_nfa_lit, build_nfa_seq, build_nfa_alt):
+	Finalised building NFA.
+
+2009-07-23  Robert Virding  <rv@stanislaw.local>
+
+	* leex.erl: Added regexp parser.
+	
+	* leex.erl (build_nfa): Modified to accept new regexp AST.
+
+2009-07-10  Robert Virding  <rv@stanislaw.local>
+
+	* leex.erl (parse_rule_regexp, collect_rule): Now use re for
+	regexps.
+
+2009-07-09  Robert Virding  <rv@stanislaw.local>
+
+	* leex.erl (pp_tokens): Improved code output.
+	(comp_crs): Get first range right.
+	(quote): Handle all unicode characters.
+
+2009-07-08  Robert Virding  <rv@stanislaw.local>
+
+	* leex.erl: State always last argument, and last return value!
+	(parse_file): No longer chain parsing of xrl file sections.
+
+2009-07-07  Robert Virding  <rv@stanislaw.local>
+
+	* leex.erl: To allow working on leex define LEEXLIB to set which
+	lib leex is in and use include_lib to find right include file.
+	
+	* leex.erl, leexinc.hrl: Imported OTP distribution version of
+	files.
+
 2009-07-01  Robert Virding  <rv@arthur>
 
 	* All files: Released Leex 0.4 to Git.

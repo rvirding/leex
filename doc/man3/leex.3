@@ -1,0 +1,368 @@
+.TH leex 3 "parsetools  1.4.7" "Ericsson AB" "ERLANG MODULE DEFINITION"
+.SH MODULE
+leex \- Lexical analyzer generator for Erlang
+.SH DESCRIPTION
+.LP
+A regular expression based lexical analyzer generator for Erlang, similar to lex or flex\&.
+
+.SH DATA TYPES
+
+.nf
+ScanRet = {ok,Tokens,EndLine} |
+   {eof,EndLine} |
+   {error,ErrorDescriptor,EndLine}
+Cont = continuation()
+ErrorDescriptor = {ErrorLine,Module,Error}
+.fi
+.SH EXPORTS
+.LP
+.B
+file(FileName) -> ok | error
+.br
+.B
+file(FileName, Options) -> ok | error
+.br
+.RS
+.LP
+Generates a lexical analyzer from the definition in the input file\&. The input file has the extension \fI\&.xrl\fR\&. This is added to the filename if it is not given\&. The resulting module is the Xrl filename without the \fI\&.xrl\fR extension\&.
+.LP
+The current options are:
+.RS 2
+.TP 4
+.B
+\fIdfa_graph\fR:
+Generates a \fI\&.dot\fR file which contains a description of the DFA in a format which can be viewed with Graphviz, \fIwww\&.graphviz\&.com\fR\&.
+.TP 4
+.B
+\fI{includefile, File}\fR:
+Uses a specific or customised prologue file instead of default \fIlib/parsetools/include/leexinc\&.hrl\fR which is otherwise included\&.
+.TP 4
+.B
+\fI{report_errors, bool()}\fR:
+Causes errors to be printed as they occur\&. Default is \fItrue\fR\&.
+.TP 4
+.B
+\fI{report_warnings, bool()}\fR:
+Causes warnings to be printed as they occur\&. Default is \fItrue\fR\&.
+.TP 4
+.B
+\fI{report, bool()}\fR:
+This is a short form for both \fIreport_errors\fR and \fIreport_warnings\fR\&.
+.TP 4
+.B
+\fI{return_errors, bool()}\fR:
+If this flag is set, \fI{error, Errors, Warnings}\fR is returned when there are errors\&. Default is \fIfalse\fR\&.
+.TP 4
+.B
+\fI{return_warnings, bool()}\fR:
+If this flag is set, an extra field containing \fIWarnings\fR is added to the tuple returned upon success\&. Default is \fIfalse\fR\&.
+.TP 4
+.B
+\fI{return, bool()}\fR:
+This is a short form for both \fIreturn_errors\fR and \fIreturn_warnings\fR\&.
+.TP 4
+.B
+\fI{scannerfile, ScannerFile}\fR:
+\fIScannerFile\fR is the name of the file that will contain the Erlang scanner code that is generated\&. The default (\fI""\fR) is to add the extension \fI\&.erl\fR to \fIFileName\fR stripped of the \fI\&.xrl\fR extension\&.
+.TP 4
+.B
+\fI{verbose, bool()}\fR:
+Outputs information from parsing the input file and generating the internal tables\&.
+.RE
+.LP
+Any of the Boolean options can be set to \fItrue\fR by stating the name of the option\&. For example, \fIverbose\fR is equivalent to \fI{verbose, true}\fR\&. 
+.RE
+.LP
+.B
+format_error(ErrorDescriptor) -> Chars
+.br
+.RS
+.TP
+Types
+ErrorDescriptor = errordesc()
+.br
+Chars = [char() | Chars]
+.br
+.RE
+.RS
+.LP
+Returns a string which describes the error ErrorDescriptor returned when there is an error in a regular expression\&.
+.RE
+.SH GENERATED SCANNER EXPORTS
+.LP
+The following functions are exported by the generated scanner\&.
+.SH EXPORTS
+.LP
+.B
+string(String) -> ScanRet
+.br
+.B
+string(String, StartLine) -> ScanRet
+.br
+.RS
+.LP
+Scans \fIString\fR and returns all the tokens in it, or an error\&. N\&.B\&. it is an error if all of the characters in \fIString\fR are consumed\&.
+.RE
+.LP
+.B
+token(Cont, Chars) -> {more,Cont} | {done,ScanRet,RestChars} 
+.br
+.B
+token(Cont, Chars, StartLine) -> {more,Cont} | {done,ScanRet,RestChars} 
+.br
+.RS
+.LP
+This is a re-entrant call to try and scan one token from \fIChars\fR\&. If there are enough characters in \fIChars\fR to either scan a token or detect an error then this will be returned with \fI{done, \&.\&.\&.}\fR\&. Otherwise \fI{cont, Cont}\fR will be returned where \fICont\fR is used in the next call to token with more characters to try an scan the token\&. This is continued until a token has been scanned\&. \fICont\fR is initially \fI[]\fR\&.
+.LP
+It is not designed to be called directly by an application but used through the i/o system where it can typically called in an application by:
+
+.nf
+io:request(InFile, {get_until,Prompt,Module,token,[Line]})
+  -> ScanRet
+.fi
+.RE
+.LP
+.B
+tokens(Cont, Chars) -> {more,Cont} | {done,ScanRet,RestChars} 
+.br
+.B
+tokens(Cont, Chars, StartLine) -> {more,Cont} | {done,ScanRet,RestChars} 
+.br
+.RS
+.LP
+This is a re-entrant call to try and scan tokens from \fIChars\fR\&. If there are enough characters in \fIChars\fR to either scan tokens or detect an error then this will be returned with \fI{done, \&.\&.\&.}\fR\&. Otherwise \fI{cont, Cont}\fR will be returned where \fICont\fR is used in the next call to tokens with more characters to try an scan the tokens\&. This is continued until all tokens have been scanned\&. \fICont\fR is initially \fI[]\fR\&.
+.LP
+This functions differs from \fItoken\fR in that it will continue to scan tokens upto and including an \fI{end_token, Token}\fR has been scanned (see next section)\&. It will then return all the tokens\&. This is typically used for scanning grammars like Erlang where there is an explicit end token, \fI\&'\&.\&'\fR\&. If no end token is found then the whole file will be scanned and returned\&. If an error occurs then all tokens upto and including the next end token will be skipped\&.
+.LP
+It is not designed to be called directly by an application but used through the i/o system where it can typically called in an application by:
+
+.nf
+io:request(InFile, {get_until,Prompt,Module,tokens,[Line]})
+  -> ScanRet
+.fi
+.RE
+.SH INPUT FILE FORMAT
+.LP
+Erlang style comments starting with a \&'%\&' are allowed in scanner files\&. A definition file has the following format:
+
+.nf
+<Header>
+
+Definitions\&.
+
+<Macro Definitions>
+
+Rules\&.
+
+<Token Rules>
+
+Erlang Code\&.
+
+<Erlang Code>
+.fi
+.LP
+The "Definitions\&.", "Rules\&." and "Erlang Code\&." headings are mandatory and must occur at the beginning of a source line\&. The <Header>, <Macro Definitions> and <Erlang Code> sections may be empty but there must be at least one rule\&.
+.LP
+Macro definitions have the following format:
+
+.nf
+NAME = VALUE
+.fi
+.LP
+and there must be spaces around \&'=\&'\&. Macros can be used in the regular expressions of rules by writing {NAME}\&. N\&.B\&. when macros are expanded in expressions the macro calls are replaced by the macro value without any form of quoting or enclosing in parentheses\&.
+.LP
+Rules have the following format:
+
+.nf
+<Regexp> : <Erlang code>\&.
+.fi
+.LP
+The <Regexp> must occur at the start of a line and not include any blanks, use \et and \es to include TAB and SPACE characters in the regular expression\&. If <Regexp> matches then the corresponding <Erlang code> is evaluated to generate a token\&. With the Erlang code the following predefined variables are available:
+.RS 2
+.TP 4
+.B
+\fITokenChars\fR:
+A list of the characters in the matched token\&.
+.TP 4
+.B
+\fITokenLen\fR:
+The number of characters in the matched token\&.
+.TP 4
+.B
+\fITokenLine\fR:
+The line number where the token occurred\&.
+.RE
+.LP
+The code must return:
+.RS 2
+.TP 4
+.B
+\fI{token, Token}\fR:
+Return \fIToken\fR to the caller\&.
+.TP 4
+.B
+\fI{end_token, Token}\fR:
+Return \fIToken\fR and is last token in a tokens call\&.
+.TP 4
+.B
+\fIskip_token\fR:
+Skip this token completely\&.
+.TP 4
+.B
+\fI{error, ErrString}\fR:
+An error in the token, \fIErrstring\fR is a string describing the error\&.
+.RE
+.LP
+It is also possible to push back characters into the input characters with the following returns:
+.RS 2
+.TP 2
+*
+\fI{token, Token, PushBackList}\fR
+.TP 2
+*
+\fI{end_token, Token, PushBackList}\fR
+.TP 2
+*
+\fI{skip_token, PushBackList}\fR
+.RE
+.LP
+These have the same meanings as the normal returns but the characters in PushBackList will be prepended to the input characters and scanned for the next token\&. Note that pushing back a newline will mean the line numbering will no longer be correct\&. N\&.B\&. Pushing back characters gives you unexpected possibilities to cause the scanner to loop!
+.LP
+The following example would match a simple Erlang integer or float and return a token which could be sent to the Erlang parser:
+
+.nf
+D = [0-9]
+
+{D}+ :
+  {token,{integer,TokenLine,list_to_integer(TokenChars)}}\&.
+
+{D}+\e\&.{D}+((E|e)(\e+|\e-)?{D}+)? :
+  {token,{float,TokenLine,list_to_float(TokenChars)}}\&.
+.fi
+.LP
+The Erlang code in the "Erlang Code\&." section is written into the output file directly after the module declaration and predefined exports declaration so it is possible to add extra exports, define imports and other attributes which are then visible in the whole file\&.
+.SH REGULAR EXPRESSIONS
+.LP
+The regular expressions allowed here is a subset of the set found in \fIegrep\fR and in the AWK programming language, as defined in the book, The AWK Programming Language, by A\&. V\&. Aho, B\&. W\&. Kernighan, P\&. J\&. Weinberger\&. They are composed of the following characters:
+.RS 2
+.TP 4
+.B
+\fIc\fR:
+Matches the non-metacharacter c\&.
+.TP 4
+.B
+\fI\ec\fR:
+Matches the escape sequence or literal character c\&.
+.TP 4
+.B
+\fI\&.\fR:
+Matches any character\&.
+.TP 4
+.B
+\fI^\fR:
+Matches the beginning of a string\&.
+.TP 4
+.B
+\fI$\fR:
+Matches the end of a string\&.
+.TP 4
+.B
+\fI[abc\&.\&.\&.]\fR:
+Character class, which matches any of the characters \fIabc\&.\&.\&.\fR\&. Character ranges are specified by a pair of characters separated by a \fI-\fR\&.
+.TP 4
+.B
+\fI[^abc\&.\&.\&.]\fR:
+Negated character class, which matches any character except \fIabc\&.\&.\&.\fR\&.
+.TP 4
+.B
+\fIr1 | r2\fR:
+Alternation\&. It matches either \fIr1\fR or \fIr2\fR\&.
+.TP 4
+.B
+\fIr1r2\fR:
+Concatenation\&. It matches \fIr1\fR and then \fIr2\fR\&.
+.TP 4
+.B
+\fIr+\fR:
+Matches one or more \fIrs\fR\&.
+.TP 4
+.B
+\fIr*\fR:
+Matches zero or more \fIrs\fR\&.
+.TP 4
+.B
+\fIr?\fR:
+Matches zero or one \fIrs\fR\&.
+.TP 4
+.B
+\fI(r)\fR:
+Grouping\&. It matches \fIr\fR\&.
+.RE
+.LP
+The escape sequences allowed are the same as for Erlang strings:
+.RS 2
+.TP 4
+.B
+\fI\eb\fR:
+Backspace\&.
+.TP 4
+.B
+\fI\ef\fR:
+Form feed\&.
+.TP 4
+.B
+\fI\fR:
+Newline (line feed)\&.
+.TP 4
+.B
+\fI\er\fR:
+Carriage return\&.
+.TP 4
+.B
+\fI\et\fR:
+Tab\&.
+.TP 4
+.B
+\fI\ee\fR:
+Escape\&.
+.TP 4
+.B
+\fI\ev\fR:
+Vertical tab\&.
+.TP 4
+.B
+\fI\es\fR:
+Space\&.
+.TP 4
+.B
+\fI\ed\fR:
+Delete\&.
+.TP 4
+.B
+\fI\eddd\fR:
+The octal value \fIddd\fR\&.
+.TP 4
+.B
+\fI\exhh\fR:
+The hexadecimal value \fIhh\fR\&.
+.TP 4
+.B
+\fI\ex{h\&.\&.\&.}\fR:
+The hexadecimal value \fIh\&.\&.\&.\fR\&.
+.TP 4
+.B
+\fI\ec\fR:
+Any other character literally, for example \fI\e\fR for backslash, \fI\e"\fR for \fI"\fR\&.
+.RE
+.LP
+The following examples define Erlang data types:
+
+.nf
+Atoms [a-z][0-9a-zA-Z_]*
+
+Variables [A-Z_][0-9a-zA-Z_]*
+
+Floats (\e+|-)?[0-9]+\e\&.[0-9]+((E|e)(\e+|-)?[0-9]+)?
+.fi
+.LP
+N\&.B\&. Anchoring a regular expression with ^ and $ is not implemented in the current version of leex and just generates a nasty error\&.

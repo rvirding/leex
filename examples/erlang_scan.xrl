@@ -1,6 +1,6 @@
 %%% File    : erlang_scan.xrl
 %%% Author  : Robert Virding
-%%% Purpose : Tkoen definitions for Erlang.
+%%% Purpose : Token definitions for Erlang.
 
 Definitions.
 O	= [0-7]
