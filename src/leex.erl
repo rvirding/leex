@@ -586,7 +586,7 @@ non_white(S) ->
 re_parse(Cs0, St) ->
     case catch re_reg(Cs0, 0, St) of
 	{RE,_,[]} -> {ok,RE};
-	{RE,_,[C|_]} -> {error,{illegal_char,[C]}};
+	{_,_,[C|_]} -> {error,{illegal_char,[C]}};
 	{parse_error,E} -> {error,E}
     end.
 
