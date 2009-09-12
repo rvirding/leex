@@ -24,29 +24,61 @@ EXPORTS
 file(FileName) -> ok | error
 file(FileName, Options) -> ok | error
 
+	Generate a lexical analyzer from the definition in the input
+	file. The input file has the extension .xrl. This is added to
+	the filename if it is not given. The resulting module is the
+	Xrl filename without the .xrl extension.
+
 	The current options are:
-
-	{includefile,File}
-		Use a specific or customised prologue file instead of
-		default leex/include/leexinc.hrl which is otherwise
-		included.
-
-	{outdir,Dir}
-		generate the scanner file in directory Dir
 
 	dfa_graph
 		generate a .dot file which contains a desciption of
 		the DFA in a format which can be viewd with Graphviz,
 		www.graphviz.com
 
-	verbose
-		Output information from parsing the input file and
+	{includefile,File}
+		Use a specific or customised prologue file instead of
+		default leex/include/leexinc.hrl which is otherwise
+		included.
+
+	{report_errors, bool()}
+		Causes errors to be printed as they occur. Default is
+		true.
+
+	{report_warnings, bool()}
+		Causes warnings to be printed as they occur. Default
+		is true.
+
+	{report, bool()}
+		This is a short form for both report_errors and
+		report_warnings.
+
+	{return_errors, bool()}
+		If this flag is set, {error, Errors, Warnings} is
+		returned when there are errors. Default is false.
+
+	{return_warnings, bool()}
+		If this flag is set, an extra field containing
+		Warnings is added to the tuple returned upon
+		success. Default is false.
+
+	{return, bool()}
+		This is a short form for both return_errors and
+		return_warnings.
+
+	{scannerfile, ScannerFile}
+		ScannerFile is the name of the file that will contain
+		the Erlang scanner code that is generated. The default
+		("") is to add the extension .erl to FileName stripped
+		of the .xrl extension.
+
+	{verbose,bool()}
+		Outputs information from parsing the input file and
 		generating the internal tables.
 
-	Generate a lexical analyzer from the definition in the input
-	file. The input file has the extension .xrl. This is added to
-	the filename if it is not given. The resulting module is the
-	Xrl filename without the .xrl extension.
+	Any of the Boolean options can be set to true by stating the
+	name of the option. For example, verbose is equivalent to
+	{verbose, true}.
 
 GENERATED SCANNER EXPORTS
 
@@ -262,6 +294,10 @@ Regular Expressions
 	    delete
 	\ddd
 	    the octal value ddd
+	\xhh
+	    the hexadecimal value hh
+	\x{h...}
+	    the hexadecimal value h...
 	\c
 	    any other character literally, for example \\ for
 	    backslash, \" for ")
@@ -276,9 +312,9 @@ Regular Expressions
 
 	N.B. Anchoring a regular expression with ^ and $ is not
 	implemented in the current version of leex and just generates
-	a nasty error.
+	a parse error.
 
 AUTHORS
 	Robert Virding - rvirding@gmail.com
 
-	Copyright © 2008 Robert Virding
+	Copyright © 2008,2009 Robert Virding

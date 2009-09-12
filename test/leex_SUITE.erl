@@ -173,9 +173,8 @@ syntax(Config) when is_list(Config) ->
                                <<"Definitions.\n"
                                  "D  = [0-9]\n"
                                  "Rules.\n"
-                                 "{L}+  : ">>),
-    ?line {error,[{_,[{4,leex,{after_regexp,_}}]}],[]} = 
-        leex:file(Filename, Ret),
+                                 "{L}+  : \n">>),
+    ?line {error,[{_,[{5,leex,missing_code}]}],[]} = leex:file(Filename, Ret),
     ?line ok = file:write_file(Filename, 
                                <<"Definitions.\n"
                                  "D  = [0-9]\n"

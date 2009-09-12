@@ -1,4 +1,4 @@
-%% Copyright (c) 2008 Robert Virding. All rights reserved.
+%% Copyright (c) 2008,2009 Robert Virding. All rights reserved.
 %%
 %% Redistribution and use in source and binary forms, with or without
 %% modification, are permitted provided that the following conditions
@@ -36,9 +36,9 @@
 
 %%-compile(export_all).
 
--import(lists, [member/2,reverse/1,sort/1,keysearch/3,keysort/2,keydelete/3,
-                map/2,foldl/3,foreach/2,flatmap/2,mapfoldl/3,
-                delete/2]).
+-import(lists, [member/2,reverse/1,sort/1,delete/2,
+		keysearch/3,keysort/2,keydelete/3,keymember/3,
+		map/2,foldl/3,foreach/2,flatmap/2,mapfoldl/3]).
 -import(string, [substr/2,substr/3,span/2,tokens/2,join/2]).
 -import(ordsets, [is_element/2,add_element/2,union/2]).
 -import(orddict, [store/3]).
@@ -139,8 +139,6 @@ format_error({regexp,E})->
 	     missing_char -> "missing character"
 	 end,
     ["bad regexp `",Es,"'"];
-format_error({after_regexp,S}) ->
-    ["bad code after regexp ",io_lib:write_string(S)];
 format_error(ignored_characters) ->
     "ignored characters".
 
@@ -488,25 +486,16 @@ parse_rule(S, Line, Atoks, Ms, N, St) ->
     case parse_rule_regexp(S, Ms, St) of
         {ok,R} ->
 	    %%io:fwrite("RE = ~p~n", [R]),
-            case erl_parse:parse_exprs(Atoks) of
-                {ok,_Aes} ->
-                    %% Check for token variables.
-                    TokenChars = var_used('TokenChars', Atoks),
-                    TokenLen = var_used('TokenLen', Atoks),
-                    TokenLine = var_used('TokenLine', Atoks),
-                    {ok,{R,N},{N,Atoks,TokenChars,TokenLen,TokenLine},St};
-                {error,_} ->
-                    add_error({Line,leex,{after_regexp,S}}, St)
-            end;
+	    %% Check for token variables.
+	    TokenChars = var_used('TokenChars', Atoks),
+	    TokenLen = var_used('TokenLen', Atoks),
+	    TokenLine = var_used('TokenLine', Atoks),
+	    {ok,{R,N},{N,Atoks,TokenChars,TokenLen,TokenLine},St};
         {error,E} ->
             add_error({Line,leex,E}, St)
     end.
 
-var_used(Name, Toks) ->
-    case keysearch(Name, 3, Toks) of
-        {value,{var,_,Name}} -> true;
-        _ -> false
-    end.
+var_used(Name, Toks) -> keymember(Name, 3, Toks).
 
 %% parse_rule_regexp(RegExpString, Macros, State) -> {ok,RegExp} | {error,Error}.
 %% Substitute in macros and parse RegExpString. Cannot use re:replace
@@ -519,8 +508,7 @@ parse_rule_regexp(RE0, [{M,Exp}|Ms], St) ->
 parse_rule_regexp(RE, [], St) ->
     %%io:fwrite("RE = ~p~n", [RE]),
     case re_parse(RE, St) of
-	{ok,R,[]} -> {ok,R};
-	{ok,_,[C|_]} -> {error,{regexp,{illegal_char,[C]}}};
+	{ok,R} -> {ok,R};
 	{error,E} -> {error,{regexp,E}}
     end.
 
@@ -593,11 +581,12 @@ non_white(S) ->
 %%  The grammar of the current regular expressions. The actual parser
 %%  is a recursive descent implementation of the grammar.
 
-%% re_parse(Chars, State) -> {ok,RegExp,RestChars} | {error,Error}.
+%% re_parse(Chars, State) -> {ok,RegExp} | {error,Error}.
 
 re_parse(Cs0, St) ->
     case catch re_reg(Cs0, 0, St) of
-	{RE,_,Cs1} -> {ok,RE,Cs1};
+	{RE,_,[]} -> {ok,RE};
+	{_,_,[C|_]} -> {error,{illegal_char,[C]}};
 	{parse_error,E} -> {error,E}
     end.
 
