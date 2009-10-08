@@ -34,32 +34,30 @@
 
 -export([compile/3,file/1,file/2,format_error/1]).
 
-%%-compile(export_all).
-
 -import(lists, [member/2,reverse/1,sort/1,delete/2,
-		keysearch/3,keysort/2,keydelete/3,keymember/3,
-		map/2,foldl/3,foreach/2,flatmap/2,mapfoldl/3]).
--import(string, [substr/2,substr/3,span/2,tokens/2,join/2]).
+                keysearch/3,keysort/2,keydelete/3,keymember/3,
+                map/2,foldl/3,foreach/2,flatmap/2]).
+-import(string, [substr/2,substr/3,span/2]).
 -import(ordsets, [is_element/2,add_element/2,union/2]).
 -import(orddict, [store/3]).
 
--include_lib("stdlib/include/erl_compile.hrl").
+-include("erl_compile.hrl").
 
--define(LEEXINC, "leexinc.hrl").		%Include file
--define(LEEXLIB, parsetools).			%Leex is in lib parsetools
-%%-define(LEEXLIB, leex).				%Leex is in lib leex
+-define(LEEXINC, "leexinc.hrl").        % Include file
+-define(LEEXLIB, parsetools).           % Leex is in lib parsetools
+%%-define(LEEXLIB, leex).               % Leex is in lib leex
 
 -define(DEFS_HEAD, "Definitions.").
 -define(RULE_HEAD, "Rules.").
 -define(CODE_HEAD, "Erlang code.").
 
--record(leex, {xfile=[],		 	%Xrl file
-               efile=[],			%Erl file
-               ifile=[],			%Include file
-               gfile=[],			%Graph file
-               module,				%Module name
-               opts=[],				%Options
-	       posix=false,			%POSIX regular expressions
+-record(leex, {xfile=[],        % Xrl file
+               efile=[],        % Erl file
+               ifile=[],        % Include file
+               gfile=[],        % Graph file
+               module,          % Module name
+               opts=[],         % Options
+               posix=false,     % POSIX regular expressions
                errors=[],
                warnings=[]
               }).
@@ -127,17 +125,17 @@ format_error(empty_rules) -> "no rules";
 format_error(bad_rule) -> "bad rule";
 format_error({regexp,E})->
     Es = case E of
-	     {interval_range,_} -> "interval range";
-	     {unterminated,Cs} ->
-		 "unterminated " ++ Cs;
-	     {illegal_char,Cs} ->
-		 "illegal character " ++ Cs;
-	     {posix_cc,What} ->
-		 ["illegal POSIX character class ",io_lib:write_string(What)];
-	     {char_class,What} ->
-		 ["illegal character class ",io_lib:write_string(What)];
-	     missing_char -> "missing character"
-	 end,
+             {interval_range,_} -> "interval range";
+             {unterminated,Cs} ->
+                 "unterminated " ++ Cs;
+             {illegal_char,Cs} ->
+                 "illegal character " ++ Cs;
+             {posix_cc,What} ->
+                 ["illegal POSIX character class ",io_lib:write_string(What)];
+             {char_class,What} ->
+                 ["illegal character class ",io_lib:write_string(What)];
+             missing_char -> "missing character"
+         end,
     ["bad regexp `",Es,"'"];
 format_error(ignored_characters) ->
     "ignored characters".
@@ -364,11 +362,12 @@ parse_file(St0) ->
         {ok,Xfile} ->
             try
                 verbose_print(St0, "Parsing file ~s, ", [St0#leex.xfile]),
-		%% We KNOW that errors throw so we can ignore them here.
-		{ok,Line1,St1} = parse_head(Xfile, St0),
-		{ok,Line2,Macs,St2} = parse_defs(Xfile, Line1, St1),
-		{ok,Line3,REAs,Actions,St3} = parse_rules(Xfile, Line2, Macs, St2),
-		{ok,Code,St4} = parse_code(Xfile, Line3, St3),
+                %% We KNOW that errors throw so we can ignore them here.
+                {ok,Line1,St1} = parse_head(Xfile, St0),
+                {ok,Line2,Macs,St2} = parse_defs(Xfile, Line1, St1),
+                {ok,Line3,REAs,Actions,St3} = 
+                    parse_rules(Xfile, Line2, Macs, St2),
+                {ok,Code,St4} = parse_code(Xfile, Line3, St3),
                 verbose_print(St1, "contained ~w rules.~n", [length(REAs)]),
                 {ok,REAs,Actions,Code,St4}
             after file:close(Xfile)
@@ -396,12 +395,12 @@ parse_defs(_, {eof,L}, St) ->
 
 parse_defs(Ifile, {ok,Chars,L}=Line, Ms, St) ->
     %% This little beauty matches out a macro definition, RE's are so clear.
-    MS = "^[ \t]*([A-Z_][A-Za-z0-9_]*)[ \t]*=[ \t]*([^ \t\r\n]*)[ \t\r\n]*$",
+    MS = "^[ \t]*([A-Z_][A-Za-z0-9_]*)[ \t]*=[ \t]*([^ \t\r\n]*)[ \t\r\n]*\$",
     case re:run(Chars, MS, [{capture,all_but_first,list}]) of
-	{match,[Name,Def]} ->
-	    %%io:fwrite("~p = ~p\n", [Name,Def]),
+        {match,[Name,Def]} ->
+            %%io:fwrite("~p = ~p\n", [Name,Def]),
             parse_defs(Ifile, nextline(Ifile, L), [{Name,Def}|Ms], St);
-        _ -> {ok,Line,Ms,St}			%Anything else
+        _ -> {ok,Line,Ms,St}                    % Anything else
     end;
 parse_defs(_, Line, Ms, St) ->
     {ok,Line,Ms,St}.
@@ -485,19 +484,20 @@ parse_rule(S, Line, [{dot,_}], Ms, N, St) ->
 parse_rule(S, Line, Atoks, Ms, N, St) ->
     case parse_rule_regexp(S, Ms, St) of
         {ok,R} ->
-	    %%io:fwrite("RE = ~p~n", [R]),
-	    %% Check for token variables.
-	    TokenChars = var_used('TokenChars', Atoks),
-	    TokenLen = var_used('TokenLen', Atoks),
-	    TokenLine = var_used('TokenLine', Atoks),
-	    {ok,{R,N},{N,Atoks,TokenChars,TokenLen,TokenLine},St};
+            %%io:fwrite("RE = ~p~n", [R]),
+            %% Check for token variables.
+            TokenChars = var_used('TokenChars', Atoks),
+            TokenLen = var_used('TokenLen', Atoks),
+            TokenLine = var_used('TokenLine', Atoks),
+            {ok,{R,N},{N,Atoks,TokenChars,TokenLen,TokenLine},St};
         {error,E} ->
             add_error({Line,leex,E}, St)
     end.
 
 var_used(Name, Toks) -> keymember(Name, 3, Toks).
 
-%% parse_rule_regexp(RegExpString, Macros, State) -> {ok,RegExp} | {error,Error}.
+%% parse_rule_regexp(RegExpString, Macros, State) ->
+%%     {ok,RegExp} | {error,Error}.
 %% Substitute in macros and parse RegExpString. Cannot use re:replace
 %% here as it uses info in replace string (&).
 
@@ -508,8 +508,8 @@ parse_rule_regexp(RE0, [{M,Exp}|Ms], St) ->
 parse_rule_regexp(RE, [], St) ->
     %%io:fwrite("RE = ~p~n", [RE]),
     case re_parse(RE, St) of
-	{ok,R} -> {ok,R};
-	{error,E} -> {error,{regexp,E}}
+        {ok,R} -> {ok,R};
+        {error,E} -> {error,{regexp,E}}
     end.
 
 %% parse_code(File, Line, State) -> {ok,Code,NewState}.
@@ -585,9 +585,9 @@ non_white(S) ->
 
 re_parse(Cs0, St) ->
     case catch re_reg(Cs0, 0, St) of
-	{RE,_,[]} -> {ok,RE};
-	{_,_,[C|_]} -> {error,{illegal_char,[C]}};
-	{parse_error,E} -> {error,E}
+        {RE,_,[]} -> {ok,RE};
+        {_,_,[C|_]} -> {error,{illegal_char,[C]}};
+        {parse_error,E} -> {error,E}
     end.
 
 parse_error(E) -> throw({parse_error,E}).
@@ -597,8 +597,8 @@ re_reg(Cs, Sn, St) -> re_alt(Cs, Sn, St).
 re_alt(Cs0, Sn0, St) ->
     {L,Sn1,Cs1} = re_seq(Cs0, Sn0, St),
     case re_alt1(Cs1, Sn1, St) of
-	{[],Sn2,Cs2} -> {L,Sn2,Cs2};
-	{Rs,Sn2,Cs2} -> {{alt,[L|Rs]},Sn2,Cs2}
+        {[],Sn2,Cs2} -> {L,Sn2,Cs2};
+        {Rs,Sn2,Cs2} -> {{alt,[L|Rs]},Sn2,Cs2}
     end.
 
 re_alt1([$||Cs0], Sn0, St) ->
@@ -611,8 +611,8 @@ re_alt1(Cs, Sn, _) -> {[],Sn,Cs}.
 %% re_seq(Cs0, Sn0, St) ->
 %%     {L,Sn1,Cs1} = repeat(Cs0, Sn0, St),
 %%     case re_seq1(Cs1, Sn1, St) of
-%% 	{[],Sn2,Cs2} -> {L,Sn2,Cs2};
-%% 	{Rs,Sn2,Cs2} -> {{seq,[L|Rs]},Sn2,Cs2}
+%%      {[],Sn2,Cs2} -> {L,Sn2,Cs2};
+%%      {Rs,Sn2,Cs2} -> {{seq,[L|Rs]},Sn2,Cs2}
 %%     end.
 
 %% re_seq(Chars, SubNumber, State) -> {RegExp,SubNumber,Chars}.
@@ -620,9 +620,9 @@ re_alt1(Cs, Sn, _) -> {[],Sn,Cs}.
 
 re_seq(Cs0, Sn0, St) ->
     case re_seq1(Cs0, Sn0, St) of
-	{[],Sn1,Cs1} -> {epsilon,Sn1,Cs1};
-	{[R],Sn1,Cs1} -> {R,Sn1,Cs1};
-	{Rs,Sn1,Cs1} -> {{seq,Rs},Sn1,Cs1}
+        {[],Sn1,Cs1} -> {epsilon,Sn1,Cs1};
+        {[R],Sn1,Cs1} -> {R,Sn1,Cs1};
+        {Rs,Sn1,Cs1} -> {{seq,Rs},Sn1,Cs1}
     end.
 
 re_seq1([C|_]=Cs0, Sn0, St) when C /= $|, C /= $) ->
@@ -641,56 +641,56 @@ re_repeat1([$*|Cs], Sn, S, St) -> re_repeat1(Cs, Sn, {kclosure,S}, St);
 re_repeat1([$+|Cs], Sn, S, St) -> re_repeat1(Cs, Sn, {pclosure,S}, St);
 re_repeat1([$?|Cs], Sn, S, St) -> re_repeat1(Cs, Sn, {optional,S}, St);
 %% { only starts interval when ere is true, otherwise normal character.
-re_repeat1([${|Cs0], Sn, S, #leex{posix=true}=St) ->	% $}
+re_repeat1([${|Cs0], Sn, S, #leex{posix=true}=St) ->    % $}
     case re_interval_range(Cs0) of
-	{Min,Max,[$}|Cs1]} when is_integer(Min), is_integer(Max), Min =< Max ->
-	    re_repeat1(Cs1, Sn, {interval,S,Min,Max}, St);
-	{Min,Max,[$}|Cs1]} when is_integer(Min), is_atom(Max) ->
-	    re_repeat1(Cs1, Sn, {interval,S,Min,Max}, St);
-	{_,_,Cs1} -> parse_error({interval_range,string_between([${|Cs0], Cs1)})
+        {Min,Max,[$}|Cs1]} when is_integer(Min), is_integer(Max), Min =< Max ->
+            re_repeat1(Cs1, Sn, {interval,S,Min,Max}, St);
+        {Min,Max,[$}|Cs1]} when is_integer(Min), is_atom(Max) ->
+            re_repeat1(Cs1, Sn, {interval,S,Min,Max}, St);
+        {_,_,Cs1} -> parse_error({interval_range,string_between([${|Cs0], Cs1)})
     end;
 re_repeat1(Cs, Sn, S, _) -> {S,Sn,Cs}.
 
 %% re_single(Chars, SubNumber, State) -> {RegExp,SubNumber,Chars}.
 %% Parse a re_single regexp.
 
-re_single([$(|Cs0], Sn0, St) ->			% $)
-    Sn1 = Sn0 + 1,				%Keep track of sub count anyway
+re_single([$(|Cs0], Sn0, St) ->                % $)
+    Sn1 = Sn0 + 1,                             % Keep track of sub count anyway
     case re_reg(Cs0, Sn1, St) of
-	{S,Sn2,[$)|Cs1]} -> {S,Sn2,Cs1};
-	%%{S,Sn2,[$)|Cs1]} -> {{sub,S,Sn1},Sn2,Cs1};
-	_ -> parse_error({unterminated,"("})
+        {S,Sn2,[$)|Cs1]} -> {S,Sn2,Cs1};
+        %%{S,Sn2,[$)|Cs1]} -> {{sub,S,Sn1},Sn2,Cs1};
+        _ -> parse_error({unterminated,"("})
     end;
 %% These are not legal inside a regexp.
 %% re_single([$^|Cs], Sn, St) -> {bos,Sn,Cs};
 %% re_single([$$|Cs], Sn, St) -> {eos,Sn,Cs};
 %% re_single([$.|Cs], Sn, St) -> {any,Sn,Cs};
-re_single([$.|Cs], Sn, _) -> {{comp_class,"\n"},Sn,Cs}; %Do this here?
+re_single([$.|Cs], Sn, _) -> {{comp_class,"\n"},Sn,Cs}; % Do this here?
 re_single("[^" ++ Cs0, Sn, St) ->
     case re_char_class(Cs0, St) of
-	{Cc,[$]|Cs1]} -> {{comp_class,Cc},Sn,Cs1};
-	_ -> parse_error({unterminated,"["})
+        {Cc,[$]|Cs1]} -> {{comp_class,Cc},Sn,Cs1};
+        _ -> parse_error({unterminated,"["})
     end;
 re_single([$[|Cs0], Sn, St) ->
     case re_char_class(Cs0, St) of
-	{Cc,[$]|Cs1]} -> {{char_class,Cc},Sn,Cs1};
-	_ -> parse_error({unterminated,"["})
+        {Cc,[$]|Cs1]} -> {{char_class,Cc},Sn,Cs1};
+        _ -> parse_error({unterminated,"["})
     end;
 re_single([$\\|Cs0], Sn, _) ->
     {C,Cs1} = re_char($\\, Cs0),
     {{lit,[C]},Sn,Cs1};
 re_single([C|Cs0], Sn, St) ->
     case special_char(C, St) of
-	true -> parse_error({illegal_char,[C]});
-	false ->
-	    {C,Cs1} = re_char(C, Cs0),
-	    {{lit,[C]},Sn,Cs1}
+        true -> parse_error({illegal_char,[C]});
+        false ->
+            {C,Cs1} = re_char(C, Cs0),
+            {{lit,[C]},Sn,Cs1}
     end;
 re_single([], _, _) -> parse_error(missing_char).
 
 -define(IS_HEX(C), C >= $0 andalso C =< $9 orelse
-	C >= $A andalso C =< $F orelse
-	C >= $a andalso C =< $f).
+        C >= $A andalso C =< $F orelse
+        C >= $a andalso C =< $f).
 
 %% re_char(Char, Chars) -> {CharValue,Chars}.
 %%  Reads one character value from the input list, it knows about escapes.
@@ -700,15 +700,21 @@ re_char($\\, [O1,O2,O3|S]) when
     {(O1*8 + O2)*8 + O3 - 73*$0,S};
 re_char($\\, [$x,H1,H2|S]) when ?IS_HEX(H1), ?IS_HEX(H2) ->
     {erlang:list_to_integer([H1,H2], 16),S};
-re_char($\\,[$x,${|S]) -> re_hex(S, []);
+re_char($\\,[$x,${|S0]) -> 
+    re_hex(S0, []);
 re_char($\\,[$x|_]) ->
     parse_error({illegal_char,"\\x"});
 re_char($\\, [C|S]) -> {escape_char(C),S};
 re_char($\\, []) -> parse_error({unterminated,"\\"});
-re_char(C, S) -> {C,S}.				%Just this character
+re_char(C, S) -> {C,S}.                         % Just this character
 
 re_hex([C|Cs], L) when ?IS_HEX(C) -> re_hex(Cs, [C|L]);
-re_hex([$}|S], L) -> {erlang:list_to_integer(lists:reverse(L), 16),S};
+re_hex([$}|S], L0) -> 
+    L = lists:reverse(L0),
+    case erlang:list_to_integer(L, 16) of
+        C when C =< 16#10FFFF -> {C,S};
+        _ -> parse_error({illegal_char,[$\\,$x,${|L]++"}"})
+    end;
 re_hex(_, _) -> parse_error({unterminated,"\\x{"}).
 
 %% special_char(Char, State) -> bool().
@@ -725,35 +731,35 @@ special_char($|, _) -> true;
 special_char($*, _) -> true;
 special_char($+, _) -> true;
 special_char($?, _) -> true;
-special_char(${, #leex{posix=true}) -> true;	%Only when POSIX set
+special_char(${, #leex{posix=true}) -> true;    % Only when POSIX set
 special_char($\\, _) -> true;
 special_char(_, _) -> false.
 
 %% re_char_class(Chars, State) -> {CharClass,Chars}.
 %% Parse a character class.
 
-re_char_class([$]|Cs], St) ->			%Must special case this.
+re_char_class([$]|Cs], St) ->                   % Must special case this.
     re_char_class(Cs, [$]], St);
 re_char_class(Cs, St) -> re_char_class(Cs, [], St).
 
 re_char_class("[:" ++ Cs0, Cc, #leex{posix=true}=St) ->
     %% POSIX char class only.
     case posix_cc(Cs0) of
-	{Pcl,":]" ++ Cs1} -> re_char_class(Cs1, [{posix,Pcl}|Cc], St);
-	{_,Cs1} -> parse_error({posix_cc,string_between(Cs0, Cs1)})
+        {Pcl,":]" ++ Cs1} -> re_char_class(Cs1, [{posix,Pcl}|Cc], St);
+        {_,Cs1} -> parse_error({posix_cc,string_between(Cs0, Cs1)})
     end;
 re_char_class([C1|Cs0], Cc, St) when C1 /= $] ->
     case re_char(C1, Cs0) of
-	{Cf,[$-,C2|Cs1]} when C2 /= $] ->
-	    case re_char(C2, Cs1) of
-		{Cl,Cs2} when Cf < Cl ->
-		    re_char_class(Cs2, [{range,Cf,Cl}|Cc], St);
-		{_,Cs2} ->
-		    parse_error({char_class,string_between([C1|Cs0], Cs2)})
-	    end;
-	{C,Cs1} -> re_char_class(Cs1, [C|Cc], St)
+        {Cf,[$-,C2|Cs1]} when C2 /= $] ->
+            case re_char(C2, Cs1) of
+                {Cl,Cs2} when Cf < Cl ->
+                    re_char_class(Cs2, [{range,Cf,Cl}|Cc], St);
+                {_,Cs2} ->
+                    parse_error({char_class,string_between([C1|Cs0], Cs2)})
+            end;
+        {C,Cs1} -> re_char_class(Cs1, [C|Cc], St)
     end;
-re_char_class(Cs, Cc, _) -> {reverse(Cc),Cs}.	%Preserve order
+re_char_class(Cs, Cc, _) -> {reverse(Cc),Cs}.   % Preserve order
 
 %% posix_cc(String) -> {PosixClass,RestString}.
 %%  Handle POSIX character classes.
@@ -772,16 +778,16 @@ posix_cc("upper" ++ Cs) -> {upper,Cs};
 posix_cc("xdigit" ++ Cs) -> {xdigit,Cs};
 posix_cc(Cs) -> parse_error({posix_cc,substr(Cs, 1, 5)}).
 
-escape_char($n) -> $\n;				%\n = LF
-escape_char($r) -> $\r;				%\r = CR
-escape_char($t) -> $\t;				%\t = TAB
-escape_char($v) -> $\v;				%\v = VT
-escape_char($b) -> $\b;				%\b = BS
-escape_char($f) -> $\f;				%\f = FF
-escape_char($e) -> $\e;				%\e = ESC
-escape_char($s) -> $\s;				%\s = SPACE
-escape_char($d) -> $\d;				%\d = DEL
-escape_char(C) -> C.				%Pass it straight through
+escape_char($n) -> $\n;                         % \n = LF
+escape_char($r) -> $\r;                         % \r = CR
+escape_char($t) -> $\t;                         % \t = TAB
+escape_char($v) -> $\v;                         % \v = VT
+escape_char($b) -> $\b;                         % \b = BS
+escape_char($f) -> $\f;                         % \f = FF
+escape_char($e) -> $\e;                         % \e = ESC
+escape_char($s) -> $\s;                         % \s = SPACE
+escape_char($d) -> $\d;                         % \d = DEL
+escape_char(C) -> C.                            % Pass it straight through
 
 %% re_interval_range(Chars) -> {Min,Max,RestChars}.
 %% NoInt     -> none,none
@@ -791,13 +797,13 @@ escape_char(C) -> C.				%Pass it straight through
 
 re_interval_range(Cs0) ->
     case re_number(Cs0) of
-	{none,Cs1} -> {none,none,Cs1};
-	{N,[$,|Cs1]} ->
-	    case re_number(Cs1) of
-		{none,Cs2} -> {N,any,Cs2};
-		{M,Cs2} -> {N,M,Cs2}
-	    end;
-	{N,Cs1} -> {N,none,Cs1}
+        {none,Cs1} -> {none,none,Cs1};
+        {N,[$,|Cs1]} ->
+            case re_number(Cs1) of
+                {none,Cs2} -> {N,any,Cs2};
+                {M,Cs2} -> {N,M,Cs2}
+            end;
+        {N,Cs1} -> {N,none,Cs1}
     end.
 
 re_number([C|Cs]) when C >= $0, C =< $9 ->
@@ -910,9 +916,9 @@ build_nfa({char_class,Cc}, N, F, NFA) ->
     {[#nfa_state{no=F,edges=[{pack_cc(Cc),N}]}|NFA],N+1,N};
 build_nfa({comp_class,Cc}, N, F, NFA) ->
     {[#nfa_state{no=F,edges=[{comp_class(Cc),N}]}|NFA],N+1,N};
-build_nfa({lit,Cs}, N, F, NFA) ->		%Implicit concatenation
+build_nfa({lit,Cs}, N, F, NFA) ->               % Implicit concatenation
     build_nfa_lit(Cs, N, F, NFA);
-build_nfa(epsilon, N, F, NFA) ->		%Just an epsilon transition
+build_nfa(epsilon, N, F, NFA) ->                % Just an epsilon transition
     {[#nfa_state{no=F,edges=[{epsilon,N}]}|NFA],N+1,N}.
 
 %% build_nfa_lit(Chars, NextState, FirstState, NFA) -> {NFA,NextState,EndState}.
@@ -920,8 +926,8 @@ build_nfa(epsilon, N, F, NFA) ->		%Just an epsilon transition
 
 build_nfa_lit(Cs, N0, F0, NFA0) ->
     foldl(fun (C, {NFA,N,F}) ->
-		  {[#nfa_state{no=F,edges=[{[{C,C}],N}]}|NFA],N+1,N}
-	  end, {NFA0,N0,F0}, Cs).
+                  {[#nfa_state{no=F,edges=[{[{C,C}],N}]}|NFA],N+1,N}
+          end, {NFA0,N0,F0}, Cs).
 
 %% build_nfa_lit([C|Cs], N, F, NFA0) when is_integer(C) ->
 %%     NFA1 = [#nfa_state{no=F,edges=[{[{C,C}],N}]}|NFA0],
@@ -933,7 +939,7 @@ build_nfa_lit(Cs, N0, F0, NFA0) ->
 
 build_nfa_seq(REs, N0, F0, NFA0) ->
     foldl(fun (RE, {NFA,N,F}) -> build_nfa(RE, N, F, NFA) end,
-	  {NFA0,N0,F0}, REs).
+          {NFA0,N0,F0}, REs).
 
 %% build_nfa_seq([RE|REs], N0, F, NFA0) ->
 %%     {NFA1,N1,E1} = build_nfa(RE, N0, F, NFA0),
@@ -949,7 +955,7 @@ build_nfa_alt([RE], N, F, NFA) -> build_nfa(RE, N, F, NFA);
 build_nfa_alt([RE|REs], N0, F, NFA0) ->
     {NFA1,N1,E1} = build_nfa(RE, N0+1, N0, NFA0),
     {NFA2,N2,E2} = build_nfa_alt(REs, N1+1, N1, NFA1),
-    E = N2,					%End state
+    E = N2,                                     % End state
     {[#nfa_state{no=F,edges=[{epsilon,N0},{epsilon,N1}]},
       #nfa_state{no=E1,edges=[{epsilon,E}]},
       #nfa_state{no=E2,edges=[{epsilon,E}]}|NFA2],
@@ -960,10 +966,10 @@ build_nfa_alt([RE|REs], N0, F, NFA0) ->
 %%  epsilon split state, not necessary but fun.
 
 %% build_nfa_alt(REs, N0, F0, NFA0) ->
-%%     E = N0,					%Must reserve End state first
+%%     E = N0,                                  % Must reserve End state first
 %%     {Fs,{NFA1,N1}} = mapfoldl(fun (RE, {NFA,N}) ->
-%% 				      build_nfa_alt1(RE, N, E, NFA)
-%% 			      end, {NFA0,N0+1}, REs),
+%%                                    build_nfa_alt1(RE, N, E, NFA)
+%%                            end, {NFA0,N0+1}, REs),
 %%     {[#nfa_state{no=F0,edges=epsilon_trans(Fs)},
 %%       #nfa_state{no=E,edges=[{epsilon,N1}]}|NFA1],N1+1,N1}.
 
@@ -977,9 +983,9 @@ build_nfa_alt([RE|REs], N0, F, NFA0) ->
 
 pack_cc(Cc) ->
     Crs = foldl(fun ({range,Cf,Cl}, Set) -> add_element({Cf,Cl}, Set);
-		    (C, Set) -> add_element({C,C}, Set)
-		end, ordsets:new(), Cc),
-    pack_crs(Crs).				%An ordset IS a list!
+                    (C, Set) -> add_element({C,C}, Set)
+                end, ordsets:new(), Cc),
+    pack_crs(Crs).                              % An ordset IS a list!
 
 pack_crs([{C1,C2}=Cr,{C3,C4}|Crs]) when C1 =< C3, C2 >= C4 ->
     %% C1      C2
@@ -1002,7 +1008,7 @@ comp_class(Cc) ->
     %% io:fwrite("comp: ~p\n      ~p\n", [Crs,Comp]),
     Comp.
 
-comp_crs([{0,C2}|Crs], 0) ->			%Get first range right
+comp_crs([{0,C2}|Crs], 0) ->                   % Get first range right
     comp_crs(Crs, C2+1);
 comp_crs([{C1,C2}|Crs], Last) ->
     [{Last,C1-1}|comp_crs(Crs, C2+1)];
@@ -1046,9 +1052,9 @@ build_dfa(Set, Us, N, Ts, Ms, NFA) ->
     %% List of all transition sets.
     Crs0 = [Cr || S <- Set,
                   {Crs,_St} <- (element(S, NFA))#nfa_state.edges,
-                  Crs /= epsilon,		%Not an epsilon transition
+                  Crs /= epsilon,        % Not an epsilon transition
                   Cr <- Crs ],
-    Crs1 = lists:usort(Crs0),			%Must remove duplicates!
+    Crs1 = lists:usort(Crs0),            % Must remove duplicates!
     %% Build list of disjoint test ranges.
     Test = disjoint_crs(Crs1),
     %% io:fwrite("bd: ~p\n    ~p\n    ~p\n    ~p\n", [Set,Crs0,Crs1,Test]),
@@ -1270,7 +1276,7 @@ open_inc_file(State) ->
     end.
 
 inc_file_name([]) ->
-    Incdir = filename:join(code:lib_dir(?LEEXLIB), "include"),
+    Incdir = filename:join(code:lib_dir(parsetools), "include"),
     filename:join(Incdir, ?LEEXINC);
 inc_file_name(Filename) ->
     Filename.
@@ -1446,12 +1452,12 @@ prep_out_actions(As) ->
     map(fun ({A,empty_action}) ->
                 {A,empty_action};
             ({A,Code,TokenChars,TokenLen,TokenLine}) ->
-		Vs = [{TokenChars,"TokenChars"},
-		      {TokenLen,"TokenLen"},
-		      {TokenLine,"TokenLine"},
-		      {TokenChars,"YYtcs"},
-		      {TokenLen or TokenChars,"TokenLen"}],
-		Vars = [if F -> S; true -> "_" end || {F,S} <- Vs],
+                Vs = [{TokenChars,"TokenChars"},
+                      {TokenLen,"TokenLen"},
+                      {TokenLine,"TokenLine"},
+                      {TokenChars,"YYtcs"},
+                      {TokenLen or TokenChars,"TokenLen"}],
+                Vars = [if F -> S; true -> "_" end || {F,S} <- Vs],
                 Name = list_to_atom(lists:concat([yyaction_,A])),
                 [Chars,Len,Line,_,_] = Vars,
                 Args = [V || V <- [Chars,Len,Line], V =/= "_"],
@@ -1499,14 +1505,14 @@ pp_symbol({Symbol, _}) -> atom_to_list(Symbol).
 
 pp_sep(Line, Line0, Prev, T) when Line > Line0 -> 
     ["\n    " | pp_sep(Line - 1, Line0, Prev, T)];
-pp_sep(_, _, {'.',_}, _) -> "";			%No space after '.' (not a dot)
-pp_sep(_, _, {'#',_}, _) -> "";			%No space after '#'
-pp_sep(_, _, {'(',_}, _) -> "";			%No space after '('
-pp_sep(_, _, {'[',_}, _) -> "";			%No space after '['
-pp_sep(_, _, _, {'.',_}) -> "";			%No space before '.'
-pp_sep(_, _, _, {'#',_}) -> "";			%No space before '#'
-pp_sep(_, _, _, {',',_}) -> "";			%No space before ','
-pp_sep(_, _, _, {')',_}) -> "";			%No space before ')'
+pp_sep(_, _, {'.',_}, _) -> "";        % No space after '.' (not a dot)
+pp_sep(_, _, {'#',_}, _) -> "";        % No space after '#'
+pp_sep(_, _, {'(',_}, _) -> "";        % No space after '('
+pp_sep(_, _, {'[',_}, _) -> "";        % No space after '['
+pp_sep(_, _, _, {'.',_}) -> "";        % No space before '.'
+pp_sep(_, _, _, {'#',_}) -> "";        % No space before '#'
+pp_sep(_, _, _, {',',_}) -> "";        % No space before ','
+pp_sep(_, _, _, {')',_}) -> "";        % No space before ')'
 pp_sep(_, _, _, _) -> " ".
 
 %% out_dfa_graph(LeexState, DFA, DfaStart) -> ok | error.
@@ -1592,8 +1598,8 @@ quote($\\) -> "\\\\";
 quote(C) when is_integer(C) ->
     %% Must remove the $ and get the \'s right.
     case io_lib:write_unicode_char(C) of
-	[$$,$\\|Cs] -> "\\\\" ++ Cs;
-	[$$|Cs] -> Cs
+        [$$,$\\|Cs] -> "\\\\" ++ Cs;
+        [$$|Cs] -> Cs
     end;
 quote(maxchar) ->
     "MAXCHAR".
