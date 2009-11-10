@@ -42,6 +42,7 @@
 -import(orddict, [store/3]).
 
 -include("erl_compile.hrl").
+%%-include_lib("stdlib/include/erl_compile.hrl").
 
 -define(LEEXINC, "leexinc.hrl").        % Include file
 -define(LEEXLIB, parsetools).           % Leex is in lib parsetools
@@ -133,8 +134,7 @@ format_error({regexp,E})->
              {posix_cc,What} ->
                  ["illegal POSIX character class ",io_lib:write_string(What)];
              {char_class,What} ->
-                 ["illegal character class ",io_lib:write_string(What)];
-             missing_char -> "missing character"
+                 ["illegal character class ",io_lib:write_string(What)]
          end,
     ["bad regexp `",Es,"'"];
 format_error(ignored_characters) ->
@@ -685,8 +685,7 @@ re_single([C|Cs0], Sn, St) ->
         false ->
             {C,Cs1} = re_char(C, Cs0),
             {{lit,[C]},Sn,Cs1}
-    end;
-re_single([], _, _) -> parse_error(missing_char).
+    end.
 
 -define(IS_HEX(C), C >= $0 andalso C =< $9 orelse
         C >= $A andalso C =< $F orelse
