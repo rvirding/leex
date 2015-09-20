@@ -254,13 +254,13 @@ Rules.
 
 &lt;Token Rules>
 
-Erlang Code.
+Erlang code.
 
-&lt;Erlang Code></code>
+&lt;Erlang code></code>
  
-    <p>The "Definitions.", "Rules." and "Erlang Code." headings are
+    <p>The "Definitions.", "Rules." and "Erlang code." headings are
       mandatory and must occur at the beginning of a source line. The
-      &lt;Header>, &lt;Macro Definitions> and &lt;Erlang Code>
+      &lt;Header>, &lt;Macro Definitions> and &lt;Erlang code>
       sections may be empty but there must be at least one rule.</p>
  
     <p>Macro definitions have the following format:</p>
@@ -347,7 +347,7 @@ D = [0-9]
 {D}+\\.{D}+((E|e)(\\+|\\-)?{D}+)? :
   {token,{float,TokenLine,list_to_float(TokenChars)}}.</code>
  
-    <p>The Erlang code in the "Erlang Code." section is written into
+    <p>The Erlang code in the "Erlang code." section is written into
       the output file directly after the module declaration and
       predefined exports declaration so it is possible to add extra
       exports, define imports and other attributes which are then

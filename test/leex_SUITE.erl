@@ -276,6 +276,58 @@ syntax(Config) when is_list(Config) ->
                    {4,leex,ignored_characters}]}]} = 
         leex:file(Filename, Ret),
 
+    ?line ok = file:write_file(Filename,
+                               <<"Definitions.\n"
+                                 "D  = [0-9]\n"
+                                 "Rules.\n"
+                                 "{L}+\\  : token.\n">>),
+    ?line {error,[{_,[{4,leex,{regexp,{unterminated,"\\"}}}]}],[]} =
+        leex:file(Filename, Ret),
+    ?line ok = file:write_file(Filename,
+                               <<"Definitions.\n"
+                                 "D  = [0-9]\n"
+                                 "Rules.\n"
+                                 "{L}+\\x  : token.\n">>),
+    ?line {error,[{_,[{4,leex,{regexp,{illegal_char,"\\x"}}}]}],[]} =
+        leex:file(Filename, Ret),
+    ?line ok = file:write_file(Filename,
+                               <<"Definitions.\n"
+                                 "D  = [0-9]\n"
+                                 "Rules.\n"
+                                 "{L}+\\x{  : token.\n">>),
+    ?line {error,[{_,[{4,leex,{regexp,{unterminated,"\\x{"}}}]}],[]} =
+        leex:file(Filename, Ret),
+    ?line ok = file:write_file(Filename,
+                               <<"Definitions.\n"
+                                 "D  = [0-9]\n"
+                                 "Rules.\n"
+                                 "[^ab : token.\n">>),
+    ?line {error,[{_,[{4,leex,{regexp,{unterminated,"["}}}]}],[]} =
+        leex:file(Filename, Ret),
+    ?line ok = file:write_file(Filename,
+                               <<"Definitions.\n"
+                                 "D  = [0-9]\n"
+                                 "Rules.\n"
+                                 "(a : token.\n">>),
+    ?line {error,[{_,[{4,leex,{regexp,{unterminated,"("}}}]}],[]} =
+        leex:file(Filename, Ret),
+    ?line ok = file:write_file(Filename,
+                               <<"Definitions.\n"
+                                 "D  = [0-9]\n"
+                                 "Rules.\n"
+                                 "[b-a] : token.\n">>),
+    ?line {error,[{_,[{4,leex,{regexp,{char_class,"b-a"}}}]}],[]} =
+        leex:file(Filename, Ret),
+
+    ?line ok = file:write_file(Filename,
+                               <<"Definitions.\n"
+                                 "D  = [0-9]\n"
+                                 "Rules.\n"
+                                 "\\x{333333333333333333333333} : token.\n">>),
+    ?line {error,[{_,[{4,leex,{regexp,
+                                {illegal_char,
+                                 "\\x{333333333333333333333333}"}}}]}],[]} =
+        leex:file(Filename, Ret),
     ok.
 
 examples(suite) ->
