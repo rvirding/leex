@@ -35,14 +35,14 @@
 -export([compile/3,file/1,file/2,format_error/1]).
 
 -import(lists, [member/2,reverse/1,sort/1,delete/2,
-                keysearch/3,keysort/2,keydelete/3,keymember/3,
+                keyfind/3,keysearch/3,keysort/2,keydelete/3,keymember/3,
                 map/2,foldl/3,foreach/2,flatmap/2]).
 -import(string, [substr/2,substr/3,span/2]).
 -import(ordsets, [is_element/2,add_element/2,union/2]).
 -import(orddict, [store/3]).
 
--include("erl_compile.hrl").
-%%-include_lib("stdlib/include/erl_compile.hrl").
+%%-include("erl_compile.hrl").
+-include_lib("stdlib/include/erl_compile.hrl").
 
 -define(LEEXINC, "leexinc.hrl").                %Include file
 -define(LEEXLIB, parsetools).                   %Leex is in lib parsetools
@@ -506,7 +506,7 @@ var_used(Name, Toks) ->
 %% here as it uses info in replace string (&).
 
 parse_rule_regexp(RE0, [{M,Exp}|Ms], St) ->
-    Split= re:split(RE0, "\\{" ++ M ++ "\\}", [{return,list}]),
+    Split = re:split(RE0, "\\{" ++ M ++ "\\}", [{return,list}]),
     RE1 = string:join(Split, Exp),
     parse_rule_regexp(RE1, Ms, St);
 parse_rule_regexp(RE, [], St) ->
